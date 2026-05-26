@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pkgd Registry Portal</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+    
+    <style>
+        :root {
+            --atticl-purple: #8F5BFD;
+            --atticl-black: #000000;
+            --atticl-white: #FFFFFF;
+        }
+
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            max-width: 600px; 
+            margin: 60px auto; 
+            padding: 0 20px; 
+            background-color: var(--atticl-black); 
+            color: var(--atticl-white); 
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1 { 
+            font-size: 2.5rem; 
+            text-align: center; 
+            margin-bottom: 5px; 
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        h1 .material-symbols-outlined {
+            font-size: 2.8rem;
+            color: var(--atticl-purple);
+        }
+
+        p.subtitle { 
+            text-align: center; 
+            color: #A0A0A0;
+            margin-bottom: 40px; 
+            font-weight: 400;
+        }
+
+        .search-box { 
+            display: flex; 
+            gap: 10px; 
+            width: 100%; 
+        }
+
+        input { 
+            flex: 1; 
+            padding: 12px 16px; 
+            background-color: #121212; 
+            border: 1px solid #333333; 
+            color: var(--atticl-white);
+            border-radius: 5px; 
+            font-size: 1rem; 
+            font-family: 'Poppins', sans-serif;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input::placeholder {
+            color: #666666;
+        }
+
+        input:focus {
+            border-color: var(--atticl-purple);
+            box-shadow: 0 0 0 1px var(--atticl-purple);
+        }
+
+        button { 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px; 
+            background-color: var(--atticl-purple); 
+            color: var(--atticl-white); 
+            border: none; 
+            border-radius: 5px; 
+            font-size: 1rem; 
+            cursor: pointer; 
+            font-weight: 600; 
+            font-family: 'Poppins', sans-serif;
+            transition: opacity 0.2s ease;
+        }
+
+        button:hover { 
+            opacity: 0.85;
+        }
+
+        button .material-symbols-outlined {
+            font-size: 20px;
+        }
+
+        .hint { 
+            margin-top: 20px; 
+            font-size: 0.9rem; 
+            color: #888888; 
+            text-align: center; 
+        }
+
+        code { 
+            background-color: #121212; 
+            color: var(--atticl-purple);
+            padding: 4px 8px; 
+            border: 1px solid #333333;
+            border-radius: 5px; 
+            font-family: monospace; 
+        }
+    </style>
+</head>
+<body>
+    <h1><span class="material-symbols-outlined">inventory_2</span> Package Registry</h1>
+    <p class="subtitle">The open-source registry for our custom package manager</p>
+    
+    <form onsubmit="event.preventDefault(); window.location.href='/packages/' + document.getElementById('pkg').value;">
+        <div class="search-box">
+            <input type="text" id="pkg" placeholder="Type a package name (e.g., dummy)..." required>
+            <button type="submit">
+                <span class="material-symbols-outlined">search</span> Go
+            </button>
+        </div>
+    </form>
+    <p class="hint">Try searching for <code>dummy</code> to see it parse the file!</p>
+</body>
+</html>
