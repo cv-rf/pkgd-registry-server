@@ -1,8 +1,10 @@
 use axum::{
-    Json, Router, extract::{Multipart, Path, State}, http::StatusCode, response::{Html, IntoResponse, Response, Redirect}, routing::get, routing::post
+    Json, Router, extract::{Multipart, Path, State, Query}, http::StatusCode, response::{Html, IntoResponse, Response, Redirect}, routing::get, routing::post
 };
+use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::collections::HashMap;
 use sha2::{Sha256, Digest};
 use tera::{Context, Tera};
 use tower_http::trace::TraceLayer;
@@ -18,6 +20,11 @@ pub struct PackageManifest {
     pub checksum: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct SearchParams {
+    q: String,
+}
+
 pub enum AppError {
     NotFound,
     InternalError(String),
@@ -25,6 +32,7 @@ pub enum AppError {
 
 struct AppState {
     tera: Tera,
+    package_index: RwLock<HashMap<String, PackageManifest>>
 }
 
 impl IntoResponse for AppError {
@@ -104,7 +112,11 @@ async fn main() {
     let mut tera = Tera::new("templates/**/*").expect("Failed to compile templates");
     tera.autoescape_on(vec!["html", "xml"]);
 
-    let shared_state = Arc::new(AppState { tera} );
+    let initial_index = build_initial_index();
+    let shared_state = Arc::new(AppState { 
+        tera,
+        package_index: RwLock::new(initial_index)
+    });
 
     let app = Router::new()
         .route("/", get(home_handler))
@@ -112,6 +124,7 @@ async fn main() {
         .route("/packages/{name}", get(package_latest_web_handler))
         .route("/packages/{name}/{version}", get(package_version_web_handler))
         
+        .route("/api/search", get(search_api_handler))
         .route("/api/packages/{name}", get(package_latest_api_handler))
         .route("/api/packages/{name}/{version}", get(package_version_api_handler))
 
@@ -131,6 +144,44 @@ fn compute_checksum(file_bytes: &[u8]) -> String {
     let result = hasher.finalize();
     
     hex::encode(result)
+}
+
+fn build_initial_index() -> HashMap<String, PackageManifest> {
+    let mut index: HashMap<String, PackageManifest> = HashMap::new();
+    
+    if let Ok(entries) = std::fs::read_dir("./storage") {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Ok(json) = std::fs::read_to_string(&path) {
+                    if let Ok(manifest) = serde_json::from_str::<PackageManifest>(&json) {
+                        
+                        let should_insert = match index.get(&manifest.name) {
+                            None => true,
+                            Some(existing) => {
+                                if let (Ok(new_v), Ok(old_v)) = (
+                                    semver::Version::parse(&manifest.version),
+                                    semver::Version::parse(&existing.version)
+                                ) {
+                                    new_v > old_v
+                                } else {
+                                    true
+                                }
+                            }
+                        };
+
+                        if should_insert {
+                            index.insert(manifest.name.clone(), manifest);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("Loaded {} unique packages into memory index.", index.len());
+    index
 }
 
 fn get_latest_version(pkg_name: &str) -> Option<String> {
@@ -170,7 +221,7 @@ async fn package_latest_web_handler(Path(name): Path<String>) -> Result<Response
 }
 
 async fn package_version_web_handler(
-    Path((name, version)): Path<(String, String)>, // 👈 Extract both path variables
+    Path((name, version)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
     let manifest_path = format!("./storage/{}-{}.json", name, version);
@@ -194,6 +245,25 @@ async fn package_latest_api_handler(Path(name): Path<String>) -> Result<Response
     let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
     
     Ok(Json(manifest).into_response())
+}
+
+async fn search_api_handler(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<SearchParams>,
+) -> Result<Json<Vec<PackageManifest>>, AppError> {
+    let query = params.q.to_lowercase();
+
+    let index = state.package_index.read().await;
+
+    let results: Vec<PackageManifest> = index.values()
+        .filter(|pkg| {
+            pkg.name.to_lowercase().contains(&query) ||
+            pkg.description.to_lowercase().contains(&query)
+        })
+        .cloned()
+        .collect();
+
+    Ok(Json(results))
 }
 
 async fn package_version_api_handler(
@@ -220,7 +290,10 @@ async fn download_handler(Path(file): Path<String>) -> Result<Response, AppError
     Ok((headers, file_bytes).into_response())
 }
 
-async fn publish_handler(mut multipart: Multipart) -> Result<impl IntoResponse, StatusCode> {
+async fn publish_handler(
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, StatusCode> {
     let mut manifest_json = None;
     let mut file_bytes = None;
 
@@ -251,6 +324,11 @@ async fn publish_handler(mut multipart: Multipart) -> Result<impl IntoResponse, 
         let updated_json = serde_json::to_string_pretty(&manifest).unwrap();
         std::fs::write(format!("./storage/{}.json", base_name), updated_json)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        {
+            let mut index = state.package_index.write().await;
+            index.insert(manifest.name.clone(), manifest.clone());
+        }
 
         return Ok((StatusCode::CREATED, "Package published successfully!"));
     }

@@ -104,12 +104,21 @@
             font-size: 20px;
         }
 
-        .hint { 
-            margin-top: 20px; 
-            font-size: 0.9rem; 
-            color: #888888; 
-            text-align: center; 
+        .search-container { position: relative; width: 100%; }
+        #search-results {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: var(--atticl-gray); border: 1px solid var(--atticl-border);
+            border-radius: 5px; margin-top: 5px; display: none;
+            max-height: 250px; overflow-y: auto; z-index: 10;
         }
+        .result-item {
+            display: block; padding: 12px 16px; text-decoration: none;
+            border-bottom: 1px solid var(--atticl-border);
+        }
+        .result-item:last-child { border-bottom: none; }
+        .result-item:hover { background: var(--atticl-black); }
+        .result-name { font-weight: 600; color: var(--atticl-purple); display: block; }
+        .result-desc { font-size: 0.85rem; color: var(--atticl-text-muted); margin-top: 4px; }
 
         code { 
             background-color: #121212; 
@@ -125,14 +134,55 @@
     <h1><span class="material-symbols-outlined">inventory_2</span> Package Registry</h1>
     <p class="subtitle">The open-source registry for our custom package manager</p>
     
-    <form onsubmit="event.preventDefault(); window.location.href='/packages/' + document.getElementById('pkg').value;">
-        <div class="search-box">
-            <input type="text" id="pkg" placeholder="Type a package name (e.g., dummy)..." required>
-            <button type="submit">
-                <span class="material-symbols-outlined">search</span> Go
-            </button>
-        </div>
-    </form>
-    <p class="hint">Try searching for <code>dummy</code> to see it parse the file!</p>
+    <div class="search-container">
+        <form onsubmit="event.preventDefault(); window.location.href='/packages/' + document.getElementById('pkg').value;">
+            <div class="search-box">
+                <input type="text" id="pkg" placeholder="Search packages (e.g., dummy)..." required autocomplete="off">
+                <button type="submit"><span class="material-symbols-outlined">search</span> Go</button>
+            </div>
+        </form>
+        
+        <div id="search-results"></div>
+    </div>
+
+    <script>
+        const input = document.getElementById('pkg');
+        const resultsBox = document.getElementById('search-results');
+
+        input.addEventListener('input', async (e) => {
+            const query = e.target.value.trim();
+            
+            if (query.length < 2) {
+                resultsBox.style.display = 'none';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                const packages = await res.json();
+                
+                if (packages.length > 0) {
+                    resultsBox.innerHTML = packages.map(pkg => `
+                        <a href="/packages/${pkg.name}" class="result-item">
+                            <span class="result-name">${pkg.name} <small style="color:#666">v${pkg.version}</small></span>
+                            <span class="result-desc">${pkg.description}</span>
+                        </a>
+                    `).join('');
+                    resultsBox.style.display = 'block';
+                } else {
+                    resultsBox.innerHTML = `<div class="result-item"><span class="result-desc">No packages found for "${query}"</span></div>`;
+                    resultsBox.style.display = 'block';
+                }
+            } catch (err) {
+                console.error("Search failed", err);
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-container')) {
+                resultsBox.style.display = 'none';
+            }
+        });
+    </script>
 </body>
 </html>
