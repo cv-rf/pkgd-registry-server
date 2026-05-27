@@ -1,10 +1,16 @@
 use axum::{
-    Json, Router, extract::{Multipart, Path, State, Query}, http::{StatusCode, HeaderMap}, response::{Html, IntoResponse, Response, Redirect}, routing::get, routing::post
+    Json, Router, extract::{Multipart, Path, State, Query, FromRequestParts}, http::{request::Parts, StatusCode}, response::{Html, IntoResponse, Response, Redirect}, routing::get, routing::post
 };
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::collections::HashMap;
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2
+};
+use rand::{distributions::Alphanumeric, Rng};
 use sha2::{Sha256, Digest};
 use tera::{Context, Tera};
 use tower_http::trace::TraceLayer;
@@ -25,6 +31,18 @@ pub struct SearchParams {
     q: String,
 }
 
+#[derive(Deserialize)]
+pub struct AuthRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AuthResponse {
+    pub token: String,
+    pub message: String,
+}
+
 pub enum AppError {
     NotFound,
     InternalError(String),
@@ -32,7 +50,37 @@ pub enum AppError {
 
 struct AppState {
     tera: Tera,
-    package_index: RwLock<HashMap<String, PackageManifest>>
+    package_index: RwLock<HashMap<String, PackageManifest>>,
+    db: SqlitePool,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct AuthenticatedUser {
+    pub id: i64,
+    pub username: String,
+}
+
+impl FromRequestParts<Arc<AppState>> for AuthenticatedUser {
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, state: &Arc<AppState>) -> Result<Self, Self::Rejection> {
+        let auth_header = parts.headers.get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .filter(|h| h.starts_with("Bearer "))
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+
+        let token = auth_header.trim_start_matches("Bearer ");
+
+        let user = sqlx::query_as::<_, AuthenticatedUser>(
+            "SELECT users.id, users.username FROM api_tokens JOIN users ON users.id = api_tokens.user_id WHERE api_tokens.token = ?"
+        )
+        .bind(token)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        user.ok_or(StatusCode::UNAUTHORIZED)
+    }
 }
 
 impl IntoResponse for AppError {
@@ -111,15 +159,45 @@ async fn main() {
 
     let mut tera = Tera::new("templates/**/*").expect("Failed to compile templates");
     tera.autoescape_on(vec!["html", "xml"]);
-
     let initial_index = build_initial_index();
+
+    let db_pool = SqlitePoolOptions::new()
+        .connect("sqlite://registry.db?mode=rwc")
+        .await
+        .expect("Failed to connect to database");
+    
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS api_tokens (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id)
+        );
+        CREATE TABLE IF NOT EXISTS package_owners (
+            package_name TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id)
+        );
+        "#
+    )
+    .execute(&db_pool)
+    .await
+    .unwrap();
+
     let shared_state = Arc::new(AppState { 
         tera,
-        package_index: RwLock::new(initial_index)
+        package_index: RwLock::new(initial_index),
+        db: db_pool,
     });
 
     let app = Router::new()
         .route("/", get(home_handler))
+
+        .route("/api/register", post(register_handler))
+        .route("/api/login", post(login_handler))
 
         .route("/packages/{name}", get(package_latest_web_handler))
         .route("/packages/{name}/{version}", get(package_version_web_handler))
@@ -292,14 +370,10 @@ async fn download_handler(Path(file): Path<String>) -> Result<Response, AppError
 
 async fn publish_handler(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    user: AuthenticatedUser,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
-
-    if auth_header != Some("Bearer atticl") {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
+    tracing::info!("User {} is attempting to publish...", user.username);
 
     let mut manifest_json = None;
     let mut file_bytes = None;
@@ -319,6 +393,25 @@ async fn publish_handler(
     if let (Some(manifest_str), Some(bytes)) = (manifest_json, file_bytes) {
         let mut manifest: PackageManifest = serde_json::from_str(&manifest_str)
             .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+        let owner: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = ?")
+            .bind(&manifest.name)
+            .fetch_optional(&state.db)
+            .await.unwrap();
+        
+        if let Some(owner_uid) = owner {
+            if owner_uid != user.id {
+                tracing::warn!("User {} tried to publish '{}' which they do not own!", user.username, manifest.name);
+                return Err(StatusCode::FORBIDDEN)
+            }
+        } else {
+            sqlx::query("INSERT INTO package_owners (package_name, user_id) VALUES (?, ?)")
+                .bind(&manifest.name)
+                .bind(user.id)
+                .execute(&state.db)
+                .await.unwrap();
+            tracing::info!("User {} claimed ownership of new package '{}'", user.username, manifest.name);
+        }
 
         let hash = compute_checksum(&bytes);
         manifest.checksum = Some(hash);
@@ -341,4 +434,79 @@ async fn publish_handler(
     }
 
     Err(StatusCode::BAD_REQUEST)
+}
+
+async fn register_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<AuthRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+
+    let password_hash = argon2
+        .hash_password(payload.password.as_bytes(), &salt)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .to_string();
+
+    let result = sqlx::query(
+        "INSERT INTO users (username, password_hash) VALUES (?, ?)")
+        .bind(&payload.username)
+        .bind(&password_hash)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(_) => {
+            tracing::info!("New user registered: {}", payload.username);
+            Ok((StatusCode::CREATED, "User created successfully. You can now login."))
+        }
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+async fn login_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<AuthRequest>,
+) -> Result<Json<AuthResponse>, StatusCode> {
+    
+    let user_result = sqlx::query_as::<_, (i64, String)>(
+        "SELECT id, password_hash FROM users WHERE username = ?"
+    )
+    .bind(&payload.username)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let (user_id, stored_hash) = user_result.ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let parsed_hash = PasswordHash::new(&stored_hash)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let is_valid = Argon2::default()
+        .verify_password(payload.password.as_bytes(), &parsed_hash)
+        .is_ok();
+
+    if !is_valid {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
+
+    sqlx::query("INSERT INTO api_tokens (token, user_id) VALUES (?, ?)")
+        .bind(&token)
+        .bind(user_id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    tracing::info!("User {} successfully logged in.", payload.username);
+
+    Ok(Json(AuthResponse {
+        token,
+        message: "Login successful. Save this token securely!".to_string(),
+    }))
 }
