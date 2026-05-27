@@ -193,6 +193,18 @@
             </li>
         </ul>
 
+        <h3>Security</h3>
+        <div style="background-color: var(--atticl-black); padding: 15px; border-radius: 5px; border: 1px solid var(--atticl-border);">
+            <p style="margin: 0; font-size: 0.9rem; color: var(--atticl-text-muted);">SHA-256 Checksum:</p>
+            <code style="display: block; margin-top: 5px; word-break: break-all;">
+                {% if manifest.checksum %}
+                    {{ manifest.checksum }}
+                {% else %}
+                    <span style="color: #666;">Not available (Legacy package)</span>
+                {% endif %}
+            </code>
+        </div>
+
         <h3>Raw JSON Manifest</h3>
         <pre><code>{{ raw_json }}</code></pre>
     </div>
