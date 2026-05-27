@@ -1,5 +1,5 @@
 use axum::{
-    Json, Router, extract::{Multipart, Path, State}, http::StatusCode, response::{Html, IntoResponse, Response}, routing::get, routing::post
+    Json, Router, extract::{Multipart, Path, State}, http::StatusCode, response::{Html, IntoResponse, Response, Redirect}, routing::get, routing::post
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -43,7 +43,7 @@ impl IntoResponse for AppError {
         };
 
         if let AppError::InternalError(err) = self {
-            error!("💥 Server Error: {}", err);
+            error!("Server Error: {}", err);
         }
 
         let body = format!(
@@ -108,8 +108,13 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(home_handler))
-        .route("/packages/{name}", get(package_web_handler))
-        .route("/api/packages/{name}", get(package_api_handler))
+
+        .route("/packages/{name}", get(package_latest_web_handler))
+        .route("/packages/{name}/{version}", get(package_version_web_handler))
+        
+        .route("/api/packages/{name}", get(package_latest_api_handler))
+        .route("/api/packages/{name}/{version}", get(package_version_api_handler))
+
         .route("/api/publish", post(publish_handler))
         .route("/download/{file}", get(download_handler))
         .layer(TraceLayer::new_for_http())
@@ -128,17 +133,47 @@ fn compute_checksum(file_bytes: &[u8]) -> String {
     hex::encode(result)
 }
 
+fn get_latest_version(pkg_name: &str) -> Option<String> {
+    let mut versions = Vec::new();
+
+    let entries = std::fs::read_dir("./storage").ok()?;
+
+    for entry in entries.filter_map(Result::ok) {
+        if let Ok(file_name) = entry.file_name().into_string() {
+            if file_name.starts_with(&format!("{}-", pkg_name)) && file_name.ends_with(".json") {
+                if let Some(version_str) = file_name
+                    .strip_prefix(&format!("{}-", pkg_name))
+                    .and_then(|s| s.strip_suffix(".json"))
+                {
+                    if let Ok(version) = semver::Version::parse(version_str) {
+                        versions.push(version);
+                    }
+                }
+            }
+        }
+    }
+
+    versions.into_iter().max().map(|v| v.to_string())
+}
+
 async fn home_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let context = Context::new();
     let html_content = state.tera.render("index.html", &context).unwrap();
     Html(html_content)
 }
 
-async fn package_web_handler(
-    Path(name): Path<String>,
+async fn package_latest_web_handler(Path(name): Path<String>) -> Result<Response, AppError> {
+    let latest = get_latest_version(&name).ok_or(AppError::NotFound)?;
+    
+    let redirect_url = format!("/packages/{}/{}", name, latest);
+    Ok(Redirect::temporary(&redirect_url).into_response())
+}
+
+async fn package_version_web_handler(
+    Path((name, version)): Path<(String, String)>, // 👈 Extract both path variables
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
-    let manifest_path = format!("./storage/{}-1.0.0.json", name);
+    let manifest_path = format!("./storage/{}-{}.json", name, version);
 
     let raw_json = std::fs::read_to_string(manifest_path)?;
     let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
@@ -151,9 +186,21 @@ async fn package_web_handler(
     Ok(Html(html_content).into_response())
 }
 
-async fn package_api_handler(Path(name): Path<String>) -> Result<Response, AppError> {
-    let manifest_path = format!("./storage/{}-1.0.0.json", name);
+async fn package_latest_api_handler(Path(name): Path<String>) -> Result<Response, AppError> {
+    let latest = get_latest_version(&name).ok_or(AppError::NotFound)?;
+    let manifest_path = format!("./storage/{}-{}.json", name, latest);
+    
+    let raw_json = std::fs::read_to_string(manifest_path)?;
+    let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
+    
+    Ok(Json(manifest).into_response())
+}
 
+async fn package_version_api_handler(
+    Path((name, version)): Path<(String, String)>
+) -> Result<Response, AppError> {
+    let manifest_path = format!("./storage/{}-{}.json", name, version);
+    
     let raw_json = std::fs::read_to_string(manifest_path)?;
     let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
     
