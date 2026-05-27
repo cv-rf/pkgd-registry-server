@@ -15,8 +15,77 @@ pub struct PackageManifest {
     pub checksum: Option<String>,
 }
 
+pub enum AppError {
+    NotFound,
+    InternalError(String),
+}
+
 struct AppState {
     tera: Tera,
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (status, title, message) = match &self {
+            AppError::NotFound => (
+                StatusCode::NOT_FOUND,
+                "404 Not Found",
+                "The package or file you are looking for does not exist.",
+            ),
+            AppError::InternalError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "500 Server Error",
+                "Something went wrong on our end while processing this request.",
+            ),
+        };
+
+        if let AppError::InternalError(err) = self {
+            eprintln!("💥 Server Error: {}", err);
+        }
+
+        let body = format!(
+            r#"<!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <title>{} | Registry</title>
+                <style>
+                    body {{ font-family: 'Poppins', sans-serif; background: #000; color: #fff; text-align: center; padding-top: 100px; }}
+                    h1 {{ color: #8F5BFD; font-size: 3rem; margin-bottom: 10px; }}
+                    a {{ color: #8F5BFD; text-decoration: none; }}
+                </style>
+            </head>
+            <body>
+                <h1>{}</h1>
+                <p style="color: #A0A0A0;">{}</p>
+                <p><a href="/">← Back to search</a></p>
+            </body>
+            </html>"#,
+            title, title, message
+        );
+
+        (status, Html(body)).into_response()
+    }
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(err: std::io::Error) -> Self {
+        match err.kind() {
+            std::io::ErrorKind::NotFound => AppError::NotFound,
+            _ => AppError::InternalError(err.to_string()),
+        }
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::InternalError(format!("Failed to parse JSON: {}", err))
+    }
+}
+
+impl From<tera::Error> for AppError {
+    fn from(err: tera::Error) -> Self {
+        AppError::InternalError(format!("Template error: {}", err))
+    }
 }
 
 #[tokio::main]
@@ -56,47 +125,40 @@ async fn home_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 async fn package_web_handler(
     Path(name): Path<String>,
     State(state): State<Arc<AppState>>,
-) -> Response {
+) -> Result<Response, AppError> {
     let manifest_path = format!("./storage/{}-1.0.0.json", name);
 
-    if !std::path::Path::new(&manifest_path).exists() {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-
-    let raw_json = std::fs::read_to_string(manifest_path).unwrap();
-    let manifest: PackageManifest = serde_json::from_str(&raw_json).unwrap();
+    let raw_json = std::fs::read_to_string(manifest_path)?;
+    let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
 
     let mut context = Context::new();
     context.insert("manifest", &manifest);
     context.insert("raw_json", &raw_json);
 
-    let html_content = state.tera.render("package.html", &context).unwrap();
-    Html(html_content).into_response()
+    let html_content = state.tera.render("package.html", &context)?;
+    Ok(Html(html_content).into_response())
 }
 
-async fn package_api_handler(Path(name): Path<String>) -> Response {
+async fn package_api_handler(Path(name): Path<String>) -> Result<Response, AppError> {
     let manifest_path = format!("./storage/{}-1.0.0.json", name);
 
-    if let Ok(raw_json) = std::fs::read_to_string(manifest_path) {
-        if let Ok(manifest) = serde_json::from_str::<PackageManifest>(&raw_json) {
-            return Json(manifest).into_response();
-        }
-    }
-
-    StatusCode::NOT_FOUND.into_response()
+    let raw_json = std::fs::read_to_string(manifest_path)?;
+    let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
+    
+    Ok(Json(manifest).into_response())
 }
 
-async fn download_handler(Path(file): Path<String>) -> Response {
+async fn download_handler(Path(file): Path<String>) -> Result<Response, AppError> {
     let file_path = format!("./storage/{}", file);
 
-    if let Ok(file_bytes) = std::fs::read(file_path) {
-        let headers = [
-            ("content-type", "application/gzip"),
-            ("content-disposition", &format!("attachment; filename=\"{}\"", file)),
-        ];
-        return (headers, file_bytes).into_response();
-    }
-    StatusCode::NOT_FOUND.into_response()
+    let file_bytes = std::fs::read(file_path)?;
+
+    let headers = [
+        ("content-type", "application/gzip"),
+        ("content-disposition", &format!("attachment; filename=\"{}\"", file)),
+    ];
+
+    Ok((headers, file_bytes).into_response())
 }
 
 async fn publish_handler(mut multipart: Multipart) -> Result<impl IntoResponse, StatusCode> {
@@ -107,11 +169,9 @@ async fn publish_handler(mut multipart: Multipart) -> Result<impl IntoResponse, 
         let name = field.name().unwrap_or("").to_string();
 
         if name == "manifest" {
-            // Read the manifest JSON string
             let text = field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?;
             manifest_json = Some(text);
         } else if name == "tarball" {
-            // Read the raw .tar.gz file bytes
             let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
             file_bytes = Some(data);
         }
