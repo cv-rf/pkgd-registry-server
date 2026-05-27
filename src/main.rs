@@ -1,5 +1,5 @@
 use axum::{
-    Json, Router, extract::{Multipart, Path, State, Query}, http::StatusCode, response::{Html, IntoResponse, Response, Redirect}, routing::get, routing::post
+    Json, Router, extract::{Multipart, Path, State, Query}, http::{StatusCode, HeaderMap}, response::{Html, IntoResponse, Response, Redirect}, routing::get, routing::post
 };
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
@@ -133,8 +133,8 @@ async fn main() {
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
-    info!("Registry Server running on http://127.0.0.1:3000");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:9999").await.unwrap();
+    info!("Registry Server running on http://0.0.0.0:9999");
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -292,8 +292,15 @@ async fn download_handler(Path(file): Path<String>) -> Result<Response, AppError
 
 async fn publish_handler(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, StatusCode> {
+    let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
+
+    if auth_header != Some("Bearer atticl") {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
     let mut manifest_json = None;
     let mut file_bytes = None;
 
