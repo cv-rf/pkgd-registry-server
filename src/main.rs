@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use sha2::{Sha256, Digest};
 use tera::{Context, Tera};
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing::{info, error};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PackageManifest {
@@ -40,7 +43,7 @@ impl IntoResponse for AppError {
         };
 
         if let AppError::InternalError(err) = self {
-            eprintln!("💥 Server Error: {}", err);
+            error!("💥 Server Error: {}", err);
         }
 
         let body = format!(
@@ -90,6 +93,14 @@ impl From<tera::Error> for AppError {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "pkgd_registry_server=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     let mut tera = Tera::new("templates/**/*").expect("Failed to compile templates");
     tera.autoescape_on(vec!["html", "xml"]);
 
@@ -101,10 +112,11 @@ async fn main() {
         .route("/api/packages/{name}", get(package_api_handler))
         .route("/api/publish", post(publish_handler))
         .route("/download/{file}", get(download_handler))
+        .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
-    println!("Registry Server running on http://127.0.0.1:3000");
+    info!("Registry Server running on http://127.0.0.1:3000");
     axum::serve(listener, app).await.unwrap();
 }
 
