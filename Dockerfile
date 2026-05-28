@@ -1,10 +1,10 @@
 # Build stage
-FROM rust:1.80-slim AS builder
+FROM rust:1.85-slim AS builder
 WORKDIR /app
 
 # Install build dependencies (C compiler needed for SQLite and reqs)
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev gcc && \
+    apt-get install -y pkg-config libssl-dev gcc libsqlite3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY . .
