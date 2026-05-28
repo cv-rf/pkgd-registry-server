@@ -23,7 +23,7 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
             for (name, downloads, is_verified) in recent_packages {
                 if let Some(pkg) = index.get(&name) {
                     
-                    let author_tier: String = sqlx::query_scalar("SELECT tier FROM users WHERE username = ?")
+                    let author_tier: String = sqlx::query_scalar("SELECT tier FROM users WHERE username = $1")
                         .bind(&pkg.author)
                         .fetch_optional(&state.db)
                         .await
@@ -83,45 +83,43 @@ pub async fn user_profile_web_handler(
     Path(username): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
-    let user_record = sqlx::query!(
-        "SELECT id, username, tier, bio FROM users WHERE username = ?",
-        username
+    let user_record: Option<(i64, String, String, String)> = sqlx::query_as(
+        "SELECT id, username, tier, bio FROM users WHERE username = $1"
     )
+    .bind(&username)
     .fetch_optional(&state.db)
     .await
     .map_err(|_| AppError::InternalError("Database error".to_string()))?;
 
-    let user = match user_record {
+    let (user_id, user_username, user_tier, user_bio) = match user_record {
         Some(u) => u,
         None => return Ok(AppError::NotFound.into_response()),
     };
 
     let mut packages = Vec::new();
-    let package_names = sqlx::query_scalar!(
-        "SELECT package_name FROM package_owners WHERE user_id = ?",
-        user.id
+    let package_names: Vec<String> = sqlx::query_scalar(
+        "SELECT package_name FROM package_owners WHERE user_id = $1"
     )
+    .bind(user_id)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
 
-    for name in package_names {
-        if let Some(pkg_name) = name {
-            let downloads: i64 = sqlx::query_scalar("SELECT downloads FROM packages WHERE name = ?")
-                .bind(&pkg_name)
-                .fetch_optional(&state.db)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?
-                .unwrap_or(0);
-            
-            packages.push(ProfilePackage { name: pkg_name, downloads });
-        }
+    for pkg_name in package_names {
+        let downloads: i64 = sqlx::query_scalar("SELECT downloads FROM packages WHERE name = $1")
+            .bind(&pkg_name)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| AppError::InternalError(e.to_string()))?
+            .unwrap_or(0);
+        
+        packages.push(ProfilePackage { name: pkg_name, downloads });
     }
 
     let mut context = Context::new();
-    context.insert("username", &user.username);
-    context.insert("tier", &user.tier);
-    context.insert("bio", &user.bio);
+    context.insert("username", &user_username);
+    context.insert("tier", &user_tier);
+    context.insert("bio", &user_bio);
     context.insert("packages", &packages);
 
     let html_content = state.tera.render("profile.html", &context)?;
@@ -152,7 +150,7 @@ pub async fn package_version_web_handler(
     let raw_json = std::fs::read_to_string(manifest_path)?;
     let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
 
-    let db_pkg: (i64, bool) = sqlx::query_as("SELECT downloads, is_verified FROM packages WHERE name = ?")
+    let db_pkg: (i64, bool) = sqlx::query_as("SELECT downloads, is_verified FROM packages WHERE name = $1")
         .bind(&name)
         .fetch_optional(&state.db)
         .await

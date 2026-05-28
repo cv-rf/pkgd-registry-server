@@ -2,15 +2,12 @@
 FROM rust:1.85-slim AS builder
 WORKDIR /app
 
-# Install build dependencies (C compiler needed for SQLite and reqs)
+# Install build dependencies
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev gcc libsqlite3-dev && \
+    apt-get install -y pkg-config libssl-dev gcc && \
     rm -rf /var/lib/apt/lists/*
 
 COPY . .
-
-# Use SQLx offline mode since .sqlx directory is present
-ENV SQLX_OFFLINE=true
 
 # Build the release binary
 RUN cargo build --release
@@ -31,7 +28,7 @@ COPY --from=builder /app/target/release/pkgd-registry-server /usr/local/bin/
 COPY --from=builder /app/templates /app/templates
 
 # Set default environment variables
-ENV DATABASE_URL="sqlite:/app/data/registry.db?mode=rwc"
+ENV DATABASE_URL="postgres://atticl:XUk2k1BSm8nztlW5gz8U93qDPPoCLQ@172.21.0.2:5432/tornhost_db"
 ENV RUST_LOG="info,pkgd_registry_server=debug"
 
 # Expose the port the server listens on

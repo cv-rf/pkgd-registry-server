@@ -9,16 +9,21 @@ services:
     ports:
       - "9999:9999"
     environment:
-      # Database connection string pointing to the mounted volume
-      - DATABASE_URL=sqlite:/app/data/registry.db?mode=rwc
+      - DATABASE_URL=${DATABASE_URL}
       - RUST_LOG=info,pkgd_registry_server=debug,tower_http=info
     volumes:
-      - registry_data:/app/data
       - registry_storage:/app/storage
+    networks:
+      - database_default
+      - nginx
+
+networks:
+  database_default:
+    external: true
+  nginx:
+    external: true
 
 volumes:
   # Named volumes for persistent storage
-  registry_data:
-    name: registry_data
   registry_storage:
     name: registry_storage

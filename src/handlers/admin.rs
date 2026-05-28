@@ -44,7 +44,7 @@ pub async fn api_list_users_handler(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let users: Vec<UserDisplay> = sqlx::query_as!(UserDisplay, "SELECT username, tier FROM users")
+    let users: Vec<UserDisplay> = sqlx::query_as::<_, UserDisplay>("SELECT username, tier FROM users")
         .fetch_all(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -66,7 +66,7 @@ pub async fn upgrade_user_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    sqlx::query("UPDATE users SET tier = ? WHERE username = ?")
+    sqlx::query("UPDATE users SET tier = $1 WHERE username = $2")
         .bind(payload.tier)
         .bind(payload.username)
         .execute(&state.db)
@@ -85,7 +85,7 @@ pub async fn toggle_verify_handler(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    sqlx::query("UPDATE packages SET is_verified = ? WHERE name = ?")
+    sqlx::query("UPDATE packages SET is_verified = $1 WHERE name = $2")
         .bind(payload.verified)
         .bind(&payload.name)
         .execute(&state.db)

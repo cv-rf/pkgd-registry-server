@@ -9,7 +9,7 @@ use axum::{
     Router,
     extract::DefaultBodyLimit,
 };
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tera::Tera;
@@ -50,21 +50,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite:registry.db?mode=rwc".to_string());
-
-    // Basic check for common Windows/Docker volume issues
-    if let Some(path) = database_url.strip_prefix("sqlite:") {
-        let path = path.split('?').next().unwrap_or(path);
-        if let Ok(metadata) = std::fs::metadata(path) {
-            if metadata.is_dir() {
-                tracing::error!("Database path '{}' is a directory! If you are using Docker, ensure you are mounting a file, or better, mount the parent directory.", path);
-            }
-        }
-    }
+        .unwrap_or_else(|_| "postgres://atticl:XUk2k1BSm8nztlW5gz8U93qDPPoCLQ@172.21.0.2:5432/tornhost_db".to_string());
 
     tracing::info!("Connecting to database: {}", database_url);
 
-    let db_pool = SqlitePoolOptions::new()
+    let db_pool = PgPoolOptions::new()
+        .max_connections(5)
         .connect(&database_url)
         .await
         .map_err(|e| {
@@ -75,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id BIGSERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             tier TEXT NOT NULL DEFAULT 'member',
@@ -93,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             name TEXT PRIMARY KEY,
             downloads INTEGER DEFAULT 0,
             is_verified BOOLEAN DEFAULT FALSE,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         "#
     )
@@ -106,7 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     if check_col.is_err() {
         info!("Adding updated_at column to packages table...");
-        let _ = sqlx::query("ALTER TABLE packages ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+        let _ = sqlx::query("ALTER TABLE packages ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             .execute(&db_pool)
             .await;
     }
@@ -123,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
 
-        let result = sqlx::query("UPDATE users SET tier = ? WHERE username = ?")
+        let result = sqlx::query("UPDATE users SET tier = $1 WHERE username = $2")
             .bind(tier)
             .bind(username)
             .execute(&db_pool)

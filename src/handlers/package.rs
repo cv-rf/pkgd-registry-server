@@ -36,7 +36,7 @@ pub async fn publish_handler(
         let mut manifest: PackageManifest = serde_json::from_str(&manifest_str)
             .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-        let owner: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = ?")
+        let owner: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1")
             .bind(&manifest.name)
             .fetch_optional(&state.db)
             .await
@@ -48,7 +48,7 @@ pub async fn publish_handler(
                 return Err(StatusCode::FORBIDDEN)
             }
         } else {
-            sqlx::query("INSERT INTO package_owners (package_name, user_id) VALUES (?, ?)")
+            sqlx::query("INSERT INTO package_owners (package_name, user_id) VALUES ($1, $2)")
                 .bind(&manifest.name)
                 .bind(user.id)
                 .execute(&state.db)
@@ -57,7 +57,7 @@ pub async fn publish_handler(
             tracing::info!("User {} claimed ownership of new package '{}'", user.username, manifest.name);
         }
 
-        sqlx::query("INSERT INTO packages (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP")
+        sqlx::query("INSERT INTO packages (name) VALUES ($1) ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP")
             .bind(&manifest.name)
             .execute(&state.db)
             .await
@@ -113,7 +113,7 @@ pub async fn download_handler(
     if let Some(idx) = file.rfind('-') {
         let pkg_name = &file[..idx];
         
-        sqlx::query("INSERT INTO packages (name, downloads) VALUES (?, 1) ON CONFLICT(name) DO UPDATE SET downloads = downloads + 1")
+        sqlx::query("INSERT INTO packages (name, downloads) VALUES ($1, 1) ON CONFLICT(name) DO UPDATE SET downloads = packages.downloads + 1")
             .bind(pkg_name)
             .execute(&state.db)
             .await

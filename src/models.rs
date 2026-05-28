@@ -73,7 +73,7 @@ pub struct ProfilePackage {
     pub downloads: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, sqlx::FromRow)]
 pub struct UserDisplay {
     pub username: String,
     pub tier: String,

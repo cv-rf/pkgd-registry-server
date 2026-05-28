@@ -40,7 +40,7 @@ pub async fn register_handler(
         .to_string();
 
     let result = sqlx::query(
-        "INSERT INTO users (username, password_hash) VALUES (?, ?)")
+        "INSERT INTO users (username, password_hash) VALUES ($1, $2)")
         .bind(&payload.username)
         .bind(&password_hash)
         .execute(&state.db)
@@ -61,7 +61,7 @@ pub async fn login_handler(
 ) -> Result<Json<AuthResponse>, StatusCode> {
     
     let user_result = sqlx::query_as::<_, (i64, String)>(
-        "SELECT id, password_hash FROM users WHERE username = ?"
+        "SELECT id, password_hash FROM users WHERE username = $1"
     )
     .bind(&payload.username)
     .fetch_optional(&state.db)
@@ -87,7 +87,7 @@ pub async fn login_handler(
         .map(char::from)
         .collect();
 
-    sqlx::query("INSERT INTO api_tokens (token, user_id) VALUES (?, ?)")
+    sqlx::query("INSERT INTO api_tokens (token, user_id) VALUES ($1, $2)")
         .bind(&token)
         .bind(user_id)
         .execute(&state.db)
@@ -106,7 +106,7 @@ pub async fn logout_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<impl IntoResponse, StatusCode> {
-    sqlx::query("DELETE FROM api_tokens WHERE token = ?")
+    sqlx::query("DELETE FROM api_tokens WHERE token = $1")
         .bind(&user.token)
         .execute(&state.db)
         .await

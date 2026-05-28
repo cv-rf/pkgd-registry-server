@@ -2,7 +2,7 @@ use axum::{
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
 };
-use sqlx::sqlite::SqlitePool;
+use sqlx::postgres::PgPool;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use std::collections::HashMap;
@@ -12,12 +12,12 @@ use crate::models::PackageManifest;
 pub struct AppState {
     pub tera: Tera,
     pub package_index: RwLock<HashMap<String, PackageManifest>>,
-    pub db: SqlitePool,
+    pub db: PgPool,
 }
 
 #[derive(sqlx::FromRow)]
 pub struct AuthenticatedUser {
-    pub id: i64,
+    pub id: i64, 
     pub username: String,
     pub tier: String,
     #[sqlx(skip)]
@@ -36,7 +36,7 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedUser {
         let token = auth_header.trim_start_matches("Bearer ");
 
         let mut user = sqlx::query_as::<_, AuthenticatedUser>(
-            "SELECT users.id, users.username, users.tier FROM api_tokens JOIN users ON users.id = api_tokens.user_id WHERE api_tokens.token = ?"
+            "SELECT users.id, users.username, users.tier FROM api_tokens JOIN users ON users.id = api_tokens.user_id WHERE api_tokens.token = $1"
         )
         .bind(token)
         .fetch_optional(&state.db)
