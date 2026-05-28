@@ -92,7 +92,7 @@ pub async fn download_handler(
     State(state): State<Arc<AppState>>,
     Path(file): Path<String>,
 ) -> Result<Response, AppError> {
-    // Try structured path first
+    
     let structured_path = if let Some(idx) = file.rfind('-') {
         let name = &file[..idx];
         let version_with_ext = &file[idx+1..];
@@ -105,7 +105,7 @@ pub async fn download_handler(
     let file_bytes = if let Some(path) = structured_path.filter(|p| std::path::Path::new(p).exists()) {
         std::fs::read(path)?
     } else {
-        // Fallback to legacy flat storage
+        
         let legacy_path = format!("./storage/{}", file);
         std::fs::read(legacy_path)?
     };

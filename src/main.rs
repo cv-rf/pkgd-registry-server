@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 use tera::Tera;
 use tower_http::trace::TraceLayer;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
-use tracing::{info, error};
+use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::state::AppState;
@@ -81,7 +81,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .execute(&db_pool)
     .await?;
 
-    // Robust migration to add updated_at to existing packages table
     let check_col = sqlx::query("SELECT updated_at FROM packages LIMIT 1")
         .execute(&db_pool)
         .await;

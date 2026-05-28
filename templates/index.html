@@ -30,7 +30,6 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* Navigation Bar */
         nav { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 30px 0; margin-bottom: 20px; }
         .logo { font-size: 1.3rem; font-weight: 600; color: var(--atticl-purple); text-decoration: none; display: flex; align-items: center; gap: 8px; }
         .nav-links { display: flex; gap: 20px; align-items: center; }
@@ -43,7 +42,6 @@
         h1 .material-symbols-outlined { font-size: 2.8rem; color: var(--atticl-purple); }
         p.subtitle { text-align: center; color: var(--atticl-text-muted); margin-bottom: 40px; font-weight: 400; }
 
-        /* Search Box */
         .search-box { display: flex; gap: 10px; width: 100%; margin-bottom: 40px;}
         input { flex: 1; padding: 12px 16px; background-color: var(--atticl-gray); border: 1px solid var(--atticl-border); color: var(--atticl-white); border-radius: 5px; font-size: 1rem; font-family: 'Poppins', sans-serif; outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
         input::placeholder { color: #666666; }
@@ -55,7 +53,6 @@
         .search-container { position: relative; width: 100%; }
         #search-results { position: absolute; top: 100%; left: 0; right: 0; background: var(--atticl-gray); border: 1px solid var(--atticl-border); border-radius: 5px; margin-top: -35px; display: none; max-height: 250px; overflow-y: auto; z-index: 10; }
         
-        /* Package Cards */
         .card { background-color: var(--atticl-gray); padding: 20px; border-radius: 8px; border: 1px solid var(--atticl-border); margin-bottom: 15px; }
         .pkg-name { font-size: 1.2rem; font-weight: 600; color: var(--atticl-purple); text-decoration: none; }
         .pkg-name:hover { text-decoration: underline; }
@@ -124,7 +121,7 @@
     {% endif %}
 
     <script>
-        // Authentication Logic
+        
         const username = localStorage.getItem('pkgd_username');
         const authNav = document.getElementById('auth-nav');
 
@@ -146,7 +143,6 @@
             window.location.reload();
         }
 
-        // Search Autocomplete Logic
         const input = document.getElementById('pkg');
         const resultsBox = document.getElementById('search-results');
 

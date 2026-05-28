@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT package_name FROM package_owners WHERE user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "package_name",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "178ea042f09e50e3b451412341a6a48f5ed67a7c6642f1e608355a2f3f897387"
+}

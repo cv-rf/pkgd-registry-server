@@ -6,7 +6,7 @@
     <title>Login | Registry Portal</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        /* Use the exact same <style> block from register.html here */
+        
         :root { --atticl-purple: #8F5BFD; --atticl-black: #000; --atticl-gray: #121212; --atticl-border: #333; --atticl-white: #FFF; }
         body { font-family: 'Poppins', sans-serif; max-width: 400px; margin: 80px auto; padding: 0 20px; background-color: var(--atticl-black); color: var(--atticl-white); }
         .card { background-color: var(--atticl-gray); padding: 40px; border-radius: 8px; border: 1px solid var(--atticl-border); text-align: center; }
@@ -57,17 +57,15 @@
 
             if (res.ok) {
                 const data = await res.json();
-                msgBox.style.color = '#10B981'; // Green
+                msgBox.style.color = '#10B981'; 
                 msgBox.innerText = "Login successful!";
                 
-                // Save the token so the frontend can use it later!
                 localStorage.setItem('pkgd_token', data.token);
                 localStorage.setItem('pkgd_username', username);
 
-                // Redirect to their new profile page
                 setTimeout(() => window.location.href = '/users/' + username, 1000);
             } else {
-                msgBox.style.color = '#EF4444'; // Red
+                msgBox.style.color = '#EF4444'; 
                 msgBox.innerText = "Invalid username or password.";
             }
         });

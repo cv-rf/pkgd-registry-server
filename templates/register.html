@@ -57,11 +57,11 @@
             msgBox.style.display = 'block';
             
             if (res.ok) {
-                msgBox.style.color = '#10B981'; // Green
+                msgBox.style.color = '#10B981'; 
                 msgBox.innerText = text;
                 setTimeout(() => window.location.href = '/login', 2000);
             } else {
-                msgBox.style.color = '#EF4444'; // Red
+                msgBox.style.color = '#EF4444'; 
                 msgBox.innerText = "Error: " + text;
             }
         });

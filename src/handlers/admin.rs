@@ -29,7 +29,7 @@ pub async fn api_dashboard_handler(
             author: "".to_string(),
             downloads,
             is_verified,
-            is_author_verified: false, // Not needed for admin dashboard typically
+            is_author_verified: false, 
         });
     }
 

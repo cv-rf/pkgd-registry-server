@@ -14,7 +14,6 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
     let index = state.package_index.read().await;
     let mut packages = Vec::new();
     
-    // Try to get 10 recent packages from DB
     let recent_result = sqlx::query_as::<_, (String, i64, bool)>("SELECT name, downloads, is_verified FROM packages ORDER BY updated_at DESC LIMIT 10")
         .fetch_all(&state.db)
         .await;
@@ -23,7 +22,7 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
         Ok(recent_packages) => {
             for (name, downloads, is_verified) in recent_packages {
                 if let Some(pkg) = index.get(&name) {
-                    // Fetch author's tier to determine if they are verified
+                    
                     let author_tier: String = sqlx::query_scalar("SELECT tier FROM users WHERE username = ?")
                         .bind(&pkg.author)
                         .fetch_optional(&state.db)
@@ -47,7 +46,7 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
         },
         Err(e) => {
             error!("Database error in home_handler: {}", e);
-            // Fallback: show any 10 packages from the index
+            
             for pkg in index.values().take(10) {
                 packages.push(PackageDisplay {
                     name: pkg.name.clone(),
