@@ -74,15 +74,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         CREATE TABLE IF NOT EXISTS api_tokens (
             token TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(id)
+            user_id BIGINT NOT NULL REFERENCES users(id)
         );
         CREATE TABLE IF NOT EXISTS package_owners (
             package_name TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(id)
+            user_id BIGINT NOT NULL REFERENCES users(id)
         );
         CREATE TABLE IF NOT EXISTS packages (
             name TEXT PRIMARY KEY,
-            downloads INTEGER DEFAULT 0,
+            downloads BIGINT DEFAULT 0,
             is_verified BOOLEAN DEFAULT FALSE,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );

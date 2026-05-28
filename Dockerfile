@@ -1,15 +1,18 @@
 # Build stage
-FROM rust:1.85-slim AS builder
+# Using the full image instead of slim to ensure all build-essential tools are present
+FROM rust:1.85 AS builder
 WORKDIR /app
 
-# Install build dependencies
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y pkg-config libssl-dev gcc && \
     rm -rf /var/lib/apt/lists/*
 
-COPY . .
+# Copy only the dependency files to cache them
+COPY Cargo.toml Cargo.lock ./
 
 # Build the release binary
+COPY . .
 RUN cargo build --release
 
 # Runtime stage
@@ -28,6 +31,7 @@ COPY --from=builder /app/target/release/pkgd-registry-server /usr/local/bin/
 COPY --from=builder /app/templates /app/templates
 
 # Set default environment variables
+# Note: These can be overridden by docker-compose or Portainer settings
 ENV DATABASE_URL="postgres://atticl:XUk2k1BSm8nztlW5gz8U93qDPPoCLQ@172.21.0.2:5432/tornhost_db"
 ENV RUST_LOG="info,pkgd_registry_server=debug"
 

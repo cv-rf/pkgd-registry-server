@@ -9,18 +9,16 @@ services:
     ports:
       - "9999:9999"
     environment:
+      # Use the DATABASE_URL from the host/Portainer environment
       - DATABASE_URL=${DATABASE_URL}
       - RUST_LOG=info,pkgd_registry_server=debug,tower_http=info
     volumes:
       - registry_storage:/app/storage
     networks:
       - database_default
-      - nginx
 
 networks:
   database_default:
-    external: true
-  nginx:
     external: true
 
 volumes:
