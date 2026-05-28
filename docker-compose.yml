@@ -1,13 +1,24 @@
+version: '3.8'
+
 services:
   registry:
-    image: ghcr.io/cv-rf/pkgd-registry-server:latest
+    build: .
+    image: pkgd-registry-server:latest
     container_name: pkgd-registry
+    restart: unless-stopped
     ports:
       - "9999:9999"
-    volumes:
-      - ./registry.db:/app/registry.db
-      - ./storage:/app/storage
-    restart: unless-stopped
     environment:
-      - RUST_LOG=info
-      - DATABASE_URL=sqlite:registry.db?mode=rwc
+      # Database connection string pointing to the mounted volume
+      - DATABASE_URL=sqlite:/app/data/registry.db?mode=rwc
+      - RUST_LOG=info,pkgd_registry_server=debug,tower_http=info
+    volumes:
+      - registry_data:/app/data
+      - registry_storage:/app/storage
+
+volumes:
+  # Named volumes for persistent storage
+  registry_data:
+    name: registry_data
+  registry_storage:
+    name: registry_storage
