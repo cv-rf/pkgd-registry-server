@@ -30,8 +30,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y libssl3 ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy binary and assets
-COPY --from:builder /app/target/release/pkgd-registry-server ./pkgd-registry-server
-COPY --from:builder /app/templates ./templates
+COPY --from=builder /app/target/release/pkgd-registry-server ./pkgd-registry-server
+COPY --from=builder /app/templates ./templates
 
 # Create storage directory
 RUN mkdir -p storage/packages
