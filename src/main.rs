@@ -49,9 +49,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args: Vec<String> = std::env::args().collect();
 
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite:registry.db?mode=rwc".to_string());
+
+    // Basic check for common Windows/Docker volume issues
+    if let Some(path) = database_url.strip_prefix("sqlite:") {
+        let path = path.split('?').next().unwrap_or(path);
+        if let Ok(metadata) = std::fs::metadata(path) {
+            if metadata.is_dir() {
+                tracing::error!("Database path '{}' is a directory! If you are using Docker, ensure you are mounting a file, or better, mount the parent directory.", path);
+            }
+        }
+    }
+
+    tracing::info!("Connecting to database: {}", database_url);
+
     let db_pool = SqlitePoolOptions::new()
-        .connect("sqlite://registry.db?mode=rwc")
-        .await?;
+        .connect(&database_url)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to connect to database at {}: {}", database_url, e);
+            e
+        })?;
     
     sqlx::query(
         r#"

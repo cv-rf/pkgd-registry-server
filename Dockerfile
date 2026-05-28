@@ -32,7 +32,7 @@ RUN mkdir -p storage/packages
 
 EXPOSE 9999
 
-ENV DATABASE_URL=sqlite://registry.db?mode=rwc
+ENV DATABASE_URL=sqlite:registry.db?mode=rwc
 ENV RUST_LOG=info
 
 CMD ["./pkgd-registry-server"]

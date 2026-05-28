@@ -10,4 +10,4 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG=info
-      - DATABASE_URL=sqlite://registry.db?mode=rwc
+      - DATABASE_URL=sqlite:registry.db?mode=rwc
