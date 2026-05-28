@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
     
     <style>
@@ -16,121 +15,69 @@
             --atticl-purple: #8F5BFD;
             --atticl-black: #000000;
             --atticl-white: #FFFFFF;
+            --atticl-gray: #121212;
+            --atticl-border: #333333;
+            --atticl-text-muted: #A0A0A0;
         }
 
         body { 
             font-family: 'Poppins', sans-serif; 
             max-width: 600px; 
-            margin: 60px auto; 
-            padding: 0 20px; 
+            margin: 0 auto; 
+            padding: 20px; 
             background-color: var(--atticl-black); 
             color: var(--atticl-white); 
             -webkit-font-smoothing: antialiased;
         }
 
-        h1 { 
-            font-size: 2.5rem; 
-            text-align: center; 
-            margin-bottom: 5px; 
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-        }
+        /* Navigation Bar */
+        nav { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 30px 0; margin-bottom: 20px; }
+        .logo { font-size: 1.3rem; font-weight: 600; color: var(--atticl-purple); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .nav-links { display: flex; gap: 20px; align-items: center; }
+        .nav-links a { color: var(--atticl-white); text-decoration: none; font-weight: 600; transition: color 0.2s; cursor: pointer; font-size: 0.95rem; }
+        .nav-links a:hover { color: var(--atticl-purple); }
+        .nav-links .primary-btn { background-color: var(--atticl-purple); padding: 8px 16px; border-radius: 5px; }
+        .nav-links .primary-btn:hover { color: var(--atticl-white); opacity: 0.9; }
 
-        h1 .material-symbols-outlined {
-            font-size: 2.8rem;
-            color: var(--atticl-purple);
-        }
+        h1 { font-size: 2.5rem; text-align: center; margin-bottom: 5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 12px; }
+        h1 .material-symbols-outlined { font-size: 2.8rem; color: var(--atticl-purple); }
+        p.subtitle { text-align: center; color: var(--atticl-text-muted); margin-bottom: 40px; font-weight: 400; }
 
-        p.subtitle { 
-            text-align: center; 
-            color: #A0A0A0;
-            margin-bottom: 40px; 
-            font-weight: 400;
-        }
-
-        .search-box { 
-            display: flex; 
-            gap: 10px; 
-            width: 100%; 
-        }
-
-        input { 
-            flex: 1; 
-            padding: 12px 16px; 
-            background-color: #121212; 
-            border: 1px solid #333333; 
-            color: var(--atticl-white);
-            border-radius: 5px; 
-            font-size: 1rem; 
-            font-family: 'Poppins', sans-serif;
-            outline: none;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        input::placeholder {
-            color: #666666;
-        }
-
-        input:focus {
-            border-color: var(--atticl-purple);
-            box-shadow: 0 0 0 1px var(--atticl-purple);
-        }
-
-        button { 
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 24px; 
-            background-color: var(--atticl-purple); 
-            color: var(--atticl-white); 
-            border: none; 
-            border-radius: 5px; 
-            font-size: 1rem; 
-            cursor: pointer; 
-            font-weight: 600; 
-            font-family: 'Poppins', sans-serif;
-            transition: opacity 0.2s ease;
-        }
-
-        button:hover { 
-            opacity: 0.85;
-        }
-
-        button .material-symbols-outlined {
-            font-size: 20px;
-        }
-
+        /* Search Box */
+        .search-box { display: flex; gap: 10px; width: 100%; margin-bottom: 40px;}
+        input { flex: 1; padding: 12px 16px; background-color: var(--atticl-gray); border: 1px solid var(--atticl-border); color: var(--atticl-white); border-radius: 5px; font-size: 1rem; font-family: 'Poppins', sans-serif; outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+        input::placeholder { color: #666666; }
+        input:focus { border-color: var(--atticl-purple); box-shadow: 0 0 0 1px var(--atticl-purple); }
+        
+        button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; background-color: var(--atticl-purple); color: var(--atticl-white); border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; font-weight: 600; font-family: 'Poppins', sans-serif; transition: opacity 0.2s ease; }
+        button:hover { opacity: 0.85; }
+        
         .search-container { position: relative; width: 100%; }
-        #search-results {
-            position: absolute; top: 100%; left: 0; right: 0;
-            background: var(--atticl-gray); border: 1px solid var(--atticl-border);
-            border-radius: 5px; margin-top: 5px; display: none;
-            max-height: 250px; overflow-y: auto; z-index: 10;
-        }
-        .result-item {
-            display: block; padding: 12px 16px; text-decoration: none;
-            border-bottom: 1px solid var(--atticl-border);
-        }
+        #search-results { position: absolute; top: 100%; left: 0; right: 0; background: var(--atticl-gray); border: 1px solid var(--atticl-border); border-radius: 5px; margin-top: -35px; display: none; max-height: 250px; overflow-y: auto; z-index: 10; }
+        
+        /* Package Cards */
+        .card { background-color: var(--atticl-gray); padding: 20px; border-radius: 8px; border: 1px solid var(--atticl-border); margin-bottom: 15px; }
+        .pkg-name { font-size: 1.2rem; font-weight: 600; color: var(--atticl-purple); text-decoration: none; }
+        .pkg-name:hover { text-decoration: underline; }
+        .pkg-author { color: var(--atticl-text-muted); font-size: 0.9rem; margin-top: 5px; }
+        .pkg-author a { color: var(--atticl-white); text-decoration: none; font-weight: 600; }
+        .pkg-author a:hover { color: var(--atticl-purple); text-decoration: underline; }
+
+        .result-item { display: block; padding: 12px 16px; text-decoration: none; border-bottom: 1px solid var(--atticl-border); }
         .result-item:last-child { border-bottom: none; }
         .result-item:hover { background: var(--atticl-black); }
         .result-name { font-weight: 600; color: var(--atticl-purple); display: block; }
         .result-desc { font-size: 0.85rem; color: var(--atticl-text-muted); margin-top: 4px; }
-
-        code { 
-            background-color: #121212; 
-            color: var(--atticl-purple);
-            padding: 4px 8px; 
-            border: 1px solid #333333;
-            border-radius: 5px; 
-            font-family: monospace; 
-        }
     </style>
 </head>
 <body>
+
+    <nav>
+        <a href="/" class="logo"><span class="material-symbols-outlined">box</span> Registry</a>
+        <div class="nav-links" id="auth-nav">
+            </div>
+    </nav>
+
     <h1><span class="material-symbols-outlined">inventory_2</span> Package Registry</h1>
     <p class="subtitle">The open-source registry for our custom package manager</p>
     
@@ -141,11 +88,65 @@
                 <button type="submit"><span class="material-symbols-outlined">search</span> Go</button>
             </div>
         </form>
-        
         <div id="search-results"></div>
     </div>
 
+    <h3 style="margin-top: 40px; margin-bottom: 15px; border-bottom: 1px solid var(--atticl-border); padding-bottom: 10px;">Recently Published</h3>
+    
+    {% if packages | length > 0 %}
+        {% for pkg in packages %}
+            <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <a href="/packages/{{ pkg.name }}" class="pkg-name">
+                        {{ pkg.name }} 
+                        {% if pkg.is_verified %}
+                            <span class="material-symbols-outlined" style="color: var(--atticl-purple); font-size: 18px; vertical-align: middle;">verified</span>
+                        {% endif %}
+                        <span style="color: var(--atticl-text-muted); font-size: 0.9rem; font-weight: 400;">v{{ pkg.version }}</span>
+                    </a>
+                    <div class="pkg-author">
+                        by <a href="/users/{{ pkg.author }}">{{ pkg.author }}</a>
+                        {% if pkg.is_author_verified %}
+                            <span class="material-symbols-outlined" style="color: var(--atticl-purple); font-size: 14px; vertical-align: middle;" title="Verified Author">verified</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="text-align: right; color: var(--atticl-text-muted); font-size: 0.85rem;">
+                    <div style="display: flex; align-items: center; gap: 4px; justify-content: flex-end;">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
+                        {{ pkg.downloads }}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p style="color: var(--atticl-text-muted);">No packages found in the registry.</p>
+    {% endif %}
+
     <script>
+        // Authentication Logic
+        const username = localStorage.getItem('pkgd_username');
+        const authNav = document.getElementById('auth-nav');
+
+        if (username) {
+            authNav.innerHTML = `
+                <a href="/users/${username}">My Profile</a>
+                <a onclick="logout()">Logout</a>
+            `;
+        } else {
+            authNav.innerHTML = `
+                <a href="/login">Login</a>
+                <a href="/register" class="primary-btn">Register</a>
+            `;
+        }
+
+        function logout() {
+            localStorage.removeItem('pkgd_token');
+            localStorage.removeItem('pkgd_username');
+            window.location.reload();
+        }
+
+        // Search Autocomplete Logic
         const input = document.getElementById('pkg');
         const resultsBox = document.getElementById('search-results');
 

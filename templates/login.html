@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Registry Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        /* Use the exact same <style> block from register.html here */
+        :root { --atticl-purple: #8F5BFD; --atticl-black: #000; --atticl-gray: #121212; --atticl-border: #333; --atticl-white: #FFF; }
+        body { font-family: 'Poppins', sans-serif; max-width: 400px; margin: 80px auto; padding: 0 20px; background-color: var(--atticl-black); color: var(--atticl-white); }
+        .card { background-color: var(--atticl-gray); padding: 40px; border-radius: 8px; border: 1px solid var(--atticl-border); text-align: center; }
+        h2 { margin-top: 0; color: var(--atticl-purple); }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; font-size: 0.9rem; margin-bottom: 8px; color: #A0A0A0; }
+        input { width: 100%; box-sizing: border-box; padding: 12px; background-color: #000; border: 1px solid var(--atticl-border); color: #FFF; border-radius: 5px; font-family: inherit; }
+        input:focus { outline: none; border-color: var(--atticl-purple); }
+        button { width: 100%; padding: 12px; background-color: var(--atticl-purple); color: #FFF; border: none; border-radius: 5px; font-weight: 600; cursor: pointer; font-size: 1rem; margin-top: 10px; }
+        button:hover { opacity: 0.9; }
+        .link { display: block; margin-top: 20px; color: #A0A0A0; font-size: 0.9rem; text-decoration: none; }
+        .link:hover { color: var(--atticl-purple); }
+        #message { margin-top: 15px; font-size: 0.9rem; display: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Welcome Back</h2>
+        <form id="loginForm">
+            <div class="input-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" required autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required>
+            </div>
+            <button type="submit">Log in</button>
+        </form>
+        <div id="message"></div>
+        <a href="/register" class="link">Don't have an account? Register</a>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const msgBox = document.getElementById('message');
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            msgBox.style.display = 'block';
+
+            if (res.ok) {
+                const data = await res.json();
+                msgBox.style.color = '#10B981'; // Green
+                msgBox.innerText = "Login successful!";
+                
+                // Save the token so the frontend can use it later!
+                localStorage.setItem('pkgd_token', data.token);
+                localStorage.setItem('pkgd_username', username);
+
+                // Redirect to their new profile page
+                setTimeout(() => window.location.href = '/users/' + username, 1000);
+            } else {
+                msgBox.style.color = '#EF4444'; // Red
+                msgBox.innerText = "Invalid username or password.";
+            }
+        });
+    </script>
+</body>
+</html>

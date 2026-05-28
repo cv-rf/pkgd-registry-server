@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ username }} | Registry Profile</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+
+    <style>
+        :root {
+            --atticl-purple: #8F5BFD;
+            --atticl-black: #000000;
+            --atticl-white: #FFFFFF;
+            --atticl-gray: #121212;
+            --atticl-border: #333333;
+            --atticl-text-muted: #A0A0A0;
+        }
+
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            max-width: 800px; 
+            margin: 40px auto; 
+            padding: 0 20px; 
+            background-color: var(--atticl-black); 
+            color: var(--atticl-white); 
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { 
+            color: var(--atticl-purple); 
+            text-decoration: none; 
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.2s ease;
+        }
+
+        a:hover { 
+            opacity: 0.8;
+            text-decoration: underline; 
+        }
+
+        .card { 
+            background-color: var(--atticl-gray); 
+            padding: 30px; 
+            border-radius: 5px; 
+            border: 1px solid var(--atticl-border); 
+            margin-top: 20px; 
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .avatar {
+            width: 80px;
+            height: 80px;
+            background-color: var(--atticl-black);
+            border: 2px solid var(--atticl-border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .avatar .material-symbols-outlined {
+            font-size: 40px;
+            color: var(--atticl-text-muted);
+        }
+
+        h1 {
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .bio {
+            color: #E0E0E0;
+            font-size: 1.05rem;
+            line-height: 1.5;
+            margin-bottom: 30px;
+        }
+
+        h3 {
+            font-weight: 600;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--atticl-border);
+            padding-bottom: 8px;
+        }
+
+        /* Tier Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .badge .material-symbols-outlined { font-size: 16px; }
+
+        .badge-verified { background-color: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid #10B981; }
+        .badge-partner { background-color: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid #F59E0B; }
+        .badge-supporter { background-color: rgba(236, 72, 153, 0.15); color: #EC4899; border: 1px solid #EC4899; }
+        .badge-staff { background-color: rgba(230, 72, 236, 0.15); color: #e648ec; border: 1px solid #b848ec; }
+        .badge-member { background-color: rgba(160, 160, 160, 0.15); color: var(--atticl-text-muted); border: 1px solid var(--atticl-border); }
+
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { margin-bottom: 12px; }
+        
+        .package-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background-color: var(--atticl-black);
+            border: 1px solid var(--atticl-border);
+            border-radius: 5px;
+            transition: border-color 0.2s ease;
+        }
+        
+        .package-item:hover { border-color: var(--atticl-purple); }
+    </style>
+</head>
+<body>
+    <a href="/" style="font-weight: 600;">
+        <span class="material-symbols-outlined" style="font-size: 20px;">arrow_back</span> 
+        Back to search
+    </a>
+    
+    <div class="card">
+        <div class="profile-header">
+            <div class="avatar">
+                <span class="material-symbols-outlined">person</span>
+            </div>
+            <div>
+                <h1>
+                    {{ username }}
+                    
+                    {% if tier == "staff" %}
+                        <span class="badge badge-staff"><span class="material-symbols-outlined">gavel</span> Staff</span>
+                    {% elif tier == "verified" %}
+                        <span class="badge badge-verified"><span class="material-symbols-outlined">verified</span> Verified</span>
+                    {% elif tier == "partner" %}
+                        <span class="badge badge-partner"><span class="material-symbols-outlined">handshake</span> Partner</span>
+                    {% elif tier == "supporter" %}
+                        <span class="badge badge-supporter"><span class="material-symbols-outlined">favorite</span> Supporter</span>
+                    {% else %}
+                        <span class="badge badge-member">Member</span>
+                    {% endif %}
+                </h1>
+            </div>
+        </div>
+
+        {% if bio %}
+            <p class="bio">{{ bio }}</p>
+        {% else %}
+            <p class="bio" style="font-style: italic; color: var(--atticl-text-muted);">This user hasn't added a bio yet.</p>
+        {% endif %}
+
+        <h3>Published Packages</h3>
+        {% if tier == "staff" %}
+            <div style="margin-bottom: 20px;">
+                <a href="/dashboard" style="color: var(--atticl-purple); text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 5px;">
+                    <span class="material-symbols-outlined">dashboard</span> Staff Dashboard
+                </a>
+            </div>
+        {% endif %}
+
+        {% if packages | length > 0 %}
+            <ul>
+                {% for pkg in packages %}
+                    <li>
+                        <a href="/packages/{{ pkg.name }}" class="package-item" style="display: flex; justify-content: space-between; align-items: center; text-decoration: none; color: var(--atticl-white);">
+                            <div style="display: flex; align-items: center;">
+                                <span class="material-symbols-outlined" style="margin-right: 10px;">inventory_2</span>
+                                {{ pkg.name }}
+                            </div>
+                            <span style="color: var(--atticl-text-muted); font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
+                                <span class="material-symbols-outlined" style="font-size: 16px;">download</span> 
+                                {{ pkg.downloads }}
+                            </span>
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p style="color: var(--atticl-text-muted);">{{ username }} hasn't published any packages yet.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

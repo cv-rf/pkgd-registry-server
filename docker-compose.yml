@@ -1,0 +1,13 @@
+services:
+  registry:
+    image: ghcr.io/cv-rf/pkgd-registry-server:latest
+    container_name: pkgd-registry
+    ports:
+      - "9999:9999"
+    volumes:
+      - ./registry.db:/app/registry.db
+      - ./storage:/app/storage
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=info
+      - DATABASE_URL=sqlite://registry.db?mode=rwc
