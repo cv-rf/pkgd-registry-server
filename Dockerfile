@@ -22,7 +22,7 @@ COPY templates ./templates
 RUN cargo build --release
 
 # --- Runtime Stage ---
-FROM debian:slim AS runtime
+FROM debian:bookworm-slim AS runtime
 
 WORKDIR /app
 
