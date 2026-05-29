@@ -16,7 +16,7 @@ services:
       - nginx
 
   registry:
-    build: .
+    image: ghcr.io/cv-rf/pkgd-registry-server:latest
     container_name: pkgd-registry
     restart: unless-stopped
     ports:
