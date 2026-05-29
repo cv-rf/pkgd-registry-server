@@ -1,12 +1,9 @@
 # Build stage
-# Using the full image instead of slim to ensure all build-essential tools are present
-FROM rust:1.85 AS builder
+FROM rust:1.85-alpine AS builder
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev gcc && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev gcc
 
 # Copy only the dependency files to cache them
 COPY Cargo.toml Cargo.lock ./
@@ -16,13 +13,11 @@ COPY . .
 RUN cargo build --release
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM alpine:latest
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update && \
-    apt-get install -y ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates
 
 # Copy binary from builder
 COPY --from=builder /app/target/release/pkgd-registry-server /usr/local/bin/
