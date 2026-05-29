@@ -1,27 +1,43 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: pkgd-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=pkgd_registry
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+      - nginx
+
   registry:
-    image: ghcr.io/cv-rf/pkgd-registry-server:latest
+    build: .
     container_name: pkgd-registry
     restart: unless-stopped
     ports:
       - "9999:9999"
     environment:
-      - DATABASE_URL=postgres://atticl:XUk2k1BSm8nztlW5gz8U93qDPPoCLQ@172.21.0.2:5432/tornhost_db
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/pkgd_registry
       - RUST_LOG=info,pkgd_registry_server=debug,tower_http=info
+    depends_on:
+      - db
     volumes:
       - registry_storage:/app/storage
     networks:
-      - database_default
+      - internal
       - nginx
 
 networks:
-  database_default:
-    external: true
+  internal:
   nginx:
     external: true
 
 volumes:
   registry_storage:
     name: registry_storage
+  postgres_data:

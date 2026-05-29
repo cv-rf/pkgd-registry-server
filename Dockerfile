@@ -26,8 +26,7 @@ COPY --from=builder /app/target/release/pkgd-registry-server /usr/local/bin/
 COPY --from=builder /app/templates /app/templates
 
 # Set default environment variables
-# Note: These can be overridden by docker-compose or Portainer settings
-ENV DATABASE_URL="postgres://atticl:XUk2k1BSm8nztlW5gz8U93qDPPoCLQ@172.21.0.2:5432/tornhost_db"
+ENV DATABASE_URL="postgres://postgres:postgres@db:5432/pkgd_registry"
 ENV RUST_LOG="info,pkgd_registry_server=debug"
 
 # Expose the port the server listens on

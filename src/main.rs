@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://atticl:XUk2k1BSm8nztlW5gz8U93qDPPoCLQ@172.21.0.2:5432/tornhost_db".to_string());
+        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/pkgd_registry".to_string());
 
     tracing::info!("Connecting to database: {}", database_url);
 
