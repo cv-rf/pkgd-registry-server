@@ -14,7 +14,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tera::Tera;
 use tower_http::trace::TraceLayer;
-use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use std::net::SocketAddr;
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer, key_extractor::SmartIpKeyExtractor};
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -138,6 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let auth_governor_conf = Arc::new(
         GovernorConfigBuilder::default()
+            .key_extractor(SmartIpKeyExtractor)
             .per_second(2)
             .burst_size(5)
             .finish()
@@ -176,7 +178,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9999").await?;
     info!("Registry Server running on http://0.0.0.0:9999");
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
 
     Ok(())
 }
