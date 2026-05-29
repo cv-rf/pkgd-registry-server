@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   registry:
-    image: ghcr.io/atticl/pkgd-registry-server:latest
+    image: ghcr.io/cv-rf/pkgd-registry-server:latest
     container_name: pkgd-registry
     restart: unless-stopped
     ports:
