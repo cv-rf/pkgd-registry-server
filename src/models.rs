@@ -90,3 +90,16 @@ pub struct VerifyRequest {
     pub name: String,
     pub verified: bool,
 }
+
+#[derive(Deserialize)]
+pub struct BioRequest {
+    pub bio: String,
+}
+
+#[derive(Serialize)]
+pub struct ProfileEditResponse {
+    pub username: String,
+    pub tier: String,
+    pub bio: String,
+    pub token: String,
+}

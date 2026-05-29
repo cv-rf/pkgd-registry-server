@@ -134,6 +134,14 @@ pub async fn dashboard_page_handler(
     Ok(Html(html_content))
 }
 
+pub async fn profile_edit_page_handler(
+    State(state): State<Arc<AppState>>,
+) -> Result<Html<String>, AppError> {
+    let context = Context::new();
+    let html_content = state.tera.render("profile_edit.html", &context)?;
+    Ok(Html(html_content))
+}
+
 pub async fn package_latest_web_handler(Path(name): Path<String>) -> Result<Response, AppError> {
     let latest = get_latest_version(&name).ok_or(AppError::NotFound)?;
     

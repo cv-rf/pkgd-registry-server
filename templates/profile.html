@@ -143,24 +143,38 @@
             <div class="avatar">
                 <span class="material-symbols-outlined">person</span>
             </div>
-            <div>
-                <h1>
-                    {{ username }}
-                    
-                    {% if tier == "staff" %}
-                        <span class="badge badge-staff"><span class="material-symbols-outlined">gavel</span> Staff</span>
-                    {% elif tier == "verified" %}
-                        <span class="badge badge-verified"><span class="material-symbols-outlined">verified</span> Verified</span>
-                    {% elif tier == "partner" %}
-                        <span class="badge badge-partner"><span class="material-symbols-outlined">handshake</span> Partner</span>
-                    {% elif tier == "supporter" %}
-                        <span class="badge badge-supporter"><span class="material-symbols-outlined">favorite</span> Supporter</span>
-                    {% else %}
-                        <span class="badge badge-member">Member</span>
-                    {% endif %}
-                </h1>
+            <div style="flex-grow: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h1>
+                        {{ username }}
+                        
+                        {% if tier == "staff" %}
+                            <span class="badge badge-staff"><span class="material-symbols-outlined">gavel</span> Staff</span>
+                        {% elif tier == "verified" %}
+                            <span class="badge badge-verified"><span class="material-symbols-outlined">verified</span> Verified</span>
+                        {% elif tier == "partner" %}
+                            <span class="badge badge-partner"><span class="material-symbols-outlined">handshake</span> Partner</span>
+                        {% elif tier == "supporter" %}
+                            <span class="badge badge-supporter"><span class="material-symbols-outlined">favorite</span> Supporter</span>
+                        {% else %}
+                            <span class="badge badge-member">Member</span>
+                        {% endif %}
+                    </h1>
+                    <div id="editProfileBtn" style="display: none;">
+                        <a href="/settings" style="font-size: 0.9rem; color: var(--atticl-text-muted);">
+                            <span class="material-symbols-outlined" style="font-size: 18px;">settings</span> Edit Profile
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
+
+        <script>
+            const localUsername = localStorage.getItem('pkgd_username');
+            if (localUsername === "{{ username }}") {
+                document.getElementById('editProfileBtn').style.display = 'block';
+            }
+        </script>
 
         {% if bio %}
             <p class="bio">{{ bio }}</p>

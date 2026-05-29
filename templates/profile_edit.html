@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Settings | Registry</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --atticl-purple: #8F5BFD; --atticl-black: #000; --atticl-gray: #121212; --atticl-border: #333; --atticl-white: #FFF; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--atticl-black); color: var(--atticl-white); margin: 0; padding: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { color: var(--atticl-purple); margin-bottom: 30px; }
+        .card { background-color: var(--atticl-gray); padding: 30px; border-radius: 8px; border: 1px solid var(--atticl-border); margin-bottom: 20px; }
+        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid var(--atticl-border); padding-bottom: 10px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 0.9rem; margin-bottom: 8px; color: #A0A0A0; }
+        textarea, input { width: 100%; box-sizing: border-box; padding: 12px; background-color: #000; border: 1px solid var(--atticl-border); color: #FFF; border-radius: 5px; font-family: inherit; }
+        textarea { resize: vertical; min-height: 100px; }
+        .token-container { display: flex; gap: 10px; align-items: center; }
+        .token-display { font-family: monospace; background: #000; padding: 12px; border: 1px solid var(--atticl-border); border-radius: 5px; flex-grow: 1; word-break: break-all; }
+        button { padding: 12px 20px; background-color: var(--atticl-purple); color: #FFF; border: none; border-radius: 5px; font-weight: 600; cursor: pointer; }
+        button.secondary { background-color: #333; }
+        button:hover { opacity: 0.9; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #A0A0A0; text-decoration: none; font-size: 0.9rem; }
+        .back-link:hover { color: var(--atticl-purple); }
+        #message { margin-top: 20px; padding: 10px; border-radius: 5px; display: none; }
+        .success { background: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid #10B981; }
+        .error { background: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid #EF4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" id="backToProfile" class="back-link">← Back to profile</a>
+        <h1>Profile Settings</h1>
+
+        <div id="message"></div>
+
+        <div class="card">
+            <h2>Public Bio</h2>
+            <div class="form-group">
+                <label for="bio">Tell the community about yourself</label>
+                <textarea id="bio" placeholder="Write something..."></textarea>
+            </div>
+            <button id="saveBio">Save Bio</button>
+        </div>
+
+        <div class="card">
+            <h2>API Token</h2>
+            <p style="font-size: 0.85rem; color: #A0A0A0; margin-bottom: 15px;">Use this token to authenticate with the CLI. Keep it secret!</p>
+            <div class="form-group">
+                <div class="token-container">
+                    <div id="tokenDisplay" class="token-display">••••••••••••••••••••••••••••••••</div>
+                    <button id="toggleToken" class="secondary">Show</button>
+                </div>
+            </div>
+            <button id="regenerateToken" class="secondary">Regenerate Token</button>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('pkgd_token');
+        const username = localStorage.getItem('pkgd_username');
+        if (!token) window.location.href = '/login';
+
+        document.getElementById('backToProfile').href = `/users/${username}`;
+
+        let currentToken = "";
+        let tokenVisible = false;
+
+        async function loadProfile() {
+            const res = await fetch('/api/profile', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('bio').value = data.bio;
+                currentToken = data.token;
+            } else if (res.status === 401) {
+                window.location.href = '/login';
+            }
+        }
+
+        function showMessage(text, isError = false) {
+            const msgBox = document.getElementById('message');
+            msgBox.innerText = text;
+            msgBox.className = isError ? 'error' : 'success';
+            msgBox.style.display = 'block';
+            setTimeout(() => msgBox.style.display = 'none', 3000);
+        }
+
+        document.getElementById('saveBio').addEventListener('click', async () => {
+            const bio = document.getElementById('bio').value;
+            const res = await fetch('/api/profile/bio', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ bio })
+            });
+            if (res.ok) {
+                showMessage("Bio updated successfully!");
+            } else {
+                showMessage("Failed to update bio.", true);
+            }
+        });
+
+        document.getElementById('toggleToken').addEventListener('click', () => {
+            const display = document.getElementById('tokenDisplay');
+            const btn = document.getElementById('toggleToken');
+            tokenVisible = !tokenVisible;
+            display.innerText = tokenVisible ? currentToken : '••••••••••••••••••••••••••••••••';
+            btn.innerText = tokenVisible ? 'Hide' : 'Show';
+        });
+
+        document.getElementById('regenerateToken').addEventListener('click', async () => {
+            if (!confirm("Are you sure? Your old token will stop working immediately.")) return;
+            
+            const res = await fetch('/api/profile/token', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem('pkgd_token', data.token);
+                currentToken = data.token;
+                document.getElementById('tokenDisplay').innerText = tokenVisible ? currentToken : '••••••••••••••••••••••••••••••••';
+                showMessage("New token generated and saved!");
+            } else {
+                showMessage("Failed to regenerate token.", true);
+            }
+        });
+
+        loadProfile();
+    </script>
+</body>
+</html>

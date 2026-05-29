@@ -22,7 +22,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::state::AppState;
 use crate::utils::{build_initial_index, migrate_storage};
 use crate::handlers::{
-    auth::{login_handler, logout_handler, register_handler},
+    auth::{login_handler, logout_handler, register_handler, get_profile_handler, update_bio_handler, regenerate_token_handler},
     package::{
         download_handler, package_latest_api_handler, package_version_api_handler,
         publish_handler, search_api_handler,
@@ -30,7 +30,7 @@ use crate::handlers::{
     web::{
         home_handler, login_page_handler, package_latest_web_handler,
         package_version_web_handler, register_page_handler, user_profile_web_handler,
-        dashboard_page_handler,
+        dashboard_page_handler, profile_edit_page_handler,
     },
     admin::{
         api_dashboard_handler, api_list_users_handler, toggle_verify_handler,
@@ -178,10 +178,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         .route("/users/{username}", get(user_profile_web_handler))
         .route("/dashboard", get(dashboard_page_handler))
+        .route("/settings", get(profile_edit_page_handler))
 
         .route("/api/register", post(register_handler).layer(GovernorLayer { config: auth_governor_conf.clone() }))
         .route("/api/login", post(login_handler).layer(GovernorLayer { config: auth_governor_conf }))
         .route("/api/logout", post(logout_handler))
+        .route("/api/profile", get(get_profile_handler))
+        .route("/api/profile/bio", post(update_bio_handler))
+        .route("/api/profile/token", post(regenerate_token_handler))
         .route("/api/admin/dashboard", get(api_dashboard_handler))
         .route("/api/admin/users", get(api_list_users_handler))
         .route("/api/admin/verify", post(toggle_verify_handler))

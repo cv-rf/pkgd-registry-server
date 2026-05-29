@@ -35,11 +35,12 @@ services:
       - registry_storage:/app/storage
     networks:
       - internal
+      - nginx
 
 networks:
   internal:
-  # nginx:
-  #   external: true
+  nginx:
+    external: true
 
 volumes:
   registry_storage:

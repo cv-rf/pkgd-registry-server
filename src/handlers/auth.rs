@@ -6,7 +6,7 @@ use axum::{
 };
 use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser};
-use crate::models::{AuthRequest, AuthResponse};
+use crate::models::{AuthRequest, AuthResponse, BioRequest, ProfileEditResponse};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2
@@ -137,4 +137,80 @@ pub async fn logout_handler(
 
     tracing::info!("User {} logged out.", user.username);
     Ok((StatusCode::OK, "Logged out successfully."))
+}
+
+pub async fn get_profile_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+) -> Result<Json<ProfileEditResponse>, StatusCode> {
+    let bio: String = sqlx::query_scalar("SELECT bio FROM users WHERE id = $1")
+        .bind(user.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch user bio: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(ProfileEditResponse {
+        username: user.username,
+        tier: user.tier,
+        bio,
+        token: user.token,
+    }))
+}
+
+pub async fn update_bio_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<BioRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    sqlx::query("UPDATE users SET bio = $1 WHERE id = $2")
+        .bind(&payload.bio)
+        .bind(user.id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update bio: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok((StatusCode::OK, "Bio updated successfully."))
+}
+
+pub async fn regenerate_token_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+) -> Result<Json<AuthResponse>, StatusCode> {
+    // Delete current token
+    sqlx::query("DELETE FROM api_tokens WHERE token = $1")
+        .bind(&user.token)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete old token: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    // Generate new token
+    let token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
+
+    sqlx::query("INSERT INTO api_tokens (token, user_id) VALUES ($1, $2)")
+        .bind(&token)
+        .bind(user.id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to insert new token: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(AuthResponse {
+        token,
+        message: "New token generated successfully. Previous token invalidated.".to_string(),
+    }))
 }
