@@ -17,30 +17,30 @@ use regex::Regex;
 pub async fn register_handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AuthRequest>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> impl IntoResponse {
     if payload.username.len() < 3 || payload.username.len() > 32 {
-        return Err(StatusCode::BAD_REQUEST);
+        return (StatusCode::BAD_REQUEST, "Username must be between 3 and 32 characters.").into_response();
     }
 
     let username_regex = Regex::new(r"^[a-zA-Z0-9_-]+$").unwrap();
     if !username_regex.is_match(&payload.username) {
-        return Err(StatusCode::BAD_REQUEST);
+        return (StatusCode::BAD_REQUEST, "Username can only contain letters, numbers, underscores, and hyphens.").into_response();
     }
 
     if payload.password.len() < 8 || payload.password.len() > 128 {
-        return Err(StatusCode::BAD_REQUEST);
+        return (StatusCode::BAD_REQUEST, "Password must be between 8 and 128 characters.").into_response();
     }
 
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
 
-    let password_hash = argon2
-        .hash_password(payload.password.as_bytes(), &salt)
-        .map_err(|e| {
+    let password_hash = match argon2.hash_password(payload.password.as_bytes(), &salt) {
+        Ok(h) => h.to_string(),
+        Err(e) => {
             tracing::error!("Password hashing failed: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .to_string();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error during password hashing.").into_response();
+        }
+    };
 
     let result = sqlx::query(
         "INSERT INTO users (username, password_hash) VALUES ($1, $2)")
@@ -52,11 +52,16 @@ pub async fn register_handler(
     match result {
         Ok(_) => {
             tracing::info!("New user registered: {}", payload.username);
-            Ok((StatusCode::CREATED, "User created successfully. You can now login."))
+            (StatusCode::CREATED, "User created successfully. You can now login.").into_response()
         }
         Err(e) => {
             tracing::error!("Registration database error: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            if let Some(db_err) = e.as_database_error() {
+                if db_err.is_unique_violation() {
+                    return (StatusCode::CONFLICT, "Username is already taken.").into_response();
+                }
+            }
+            (StatusCode::INTERNAL_SERVER_ERROR, "Registration failed due to a server database error.").into_response()
         }
     }
 }
@@ -72,12 +77,18 @@ pub async fn login_handler(
     .bind(&payload.username)
     .fetch_optional(&state.db)
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        tracing::error!("Login database error (user fetch): {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let (user_id, stored_hash) = user_result.ok_or(StatusCode::UNAUTHORIZED)?;
 
     let parsed_hash = PasswordHash::new(&stored_hash)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Invalid stored password hash: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let is_valid = Argon2::default()
         .verify_password(payload.password.as_bytes(), &parsed_hash)
@@ -98,7 +109,10 @@ pub async fn login_handler(
         .bind(user_id)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Login database error (token insert): {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     tracing::info!("User {} successfully logged in.", payload.username);
 
@@ -116,11 +130,11 @@ pub async fn logout_handler(
         .bind(&user.token)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Logout database error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     tracing::info!("User {} logged out.", user.username);
-    Ok((StatusCode::OK, "Logged out successfully."))
-}
-nfo!("User {} logged out.", user.username);
     Ok((StatusCode::OK, "Logged out successfully."))
 }

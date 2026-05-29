@@ -55,40 +55,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Connecting to database: {}", database_url);
 
-    let db_pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to connect to database at {}: {}", database_url, e);
-            e
-        })?;
+    let mut db_pool = None;
+    for i in 1..=5 {
+        match PgPoolOptions::new()
+            .max_connections(5)
+            .acquire_timeout(std::time::Duration::from_secs(3))
+            .connect(&database_url)
+            .await
+        {
+            Ok(pool) => {
+                db_pool = Some(pool);
+                break;
+            }
+            Err(e) => {
+                if i == 5 {
+                    tracing::error!("Failed to connect to database after 5 attempts: {}", e);
+                    return Err(e.into());
+                }
+                tracing::warn!("Database connection attempt {} failed: {}. Retrying in 2s...", i, e);
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+        }
+    }
+    let db_pool = db_pool.unwrap();
     
-    sqlx::raw_sql(
+    // Use individual queries for better reliability and error reporting
+    let tables = [
         "CREATE TABLE IF NOT EXISTS users (
             id BIGSERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             tier TEXT NOT NULL DEFAULT 'member',
             bio TEXT DEFAULT ''
-        );
-        CREATE TABLE IF NOT EXISTS api_tokens (
+        )",
+        "CREATE TABLE IF NOT EXISTS api_tokens (
             token TEXT PRIMARY KEY,
             user_id BIGINT NOT NULL REFERENCES users(id)
-        );
-        CREATE TABLE IF NOT EXISTS package_owners (
+        )",
+        "CREATE TABLE IF NOT EXISTS package_owners (
             package_name TEXT PRIMARY KEY,
             user_id BIGINT NOT NULL REFERENCES users(id)
-        );
-        CREATE TABLE IF NOT EXISTS packages (
+        )",
+        "CREATE TABLE IF NOT EXISTS packages (
             name TEXT PRIMARY KEY,
             downloads BIGINT DEFAULT 0,
             is_verified BOOLEAN DEFAULT FALSE,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );"
-    )
-    .execute(&db_pool)
-    .await?;
+        )"
+    ];
+
+    for table_query in tables {
+        sqlx::query(table_query)
+            .execute(&db_pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to create table: {}", e);
+                e
+            })?;
+    }
 
     let check_col = sqlx::query("SELECT updated_at FROM packages LIMIT 1")
         .fetch_optional(&db_pool)

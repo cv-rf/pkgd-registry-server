@@ -28,11 +28,11 @@
         <form id="registerForm">
             <div class="input-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" required autocomplete="off">
+                <input type="text" id="username" required autocomplete="off" minlength="3" maxlength="32" pattern="^[a-zA-Z0-9_-]+$" title="Only letters, numbers, underscores, and hyphens are allowed.">
             </div>
             <div class="input-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" required>
+                <input type="password" id="password" required minlength="8" maxlength="128">
             </div>
             <button type="submit">Register</button>
         </form>

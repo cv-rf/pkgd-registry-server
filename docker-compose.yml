@@ -11,12 +11,16 @@ services:
       - POSTGRES_DB=pkgd_registry
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pkgd_registry"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - internal
-      - nginx
 
   registry:
-    image: ghcr.io/cv-rf/pkgd-registry-server:latest
+    build: .
     container_name: pkgd-registry
     restart: unless-stopped
     ports:
@@ -25,17 +29,17 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/pkgd_registry
       - RUST_LOG=info,pkgd_registry_server=debug,tower_http=info
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
       - registry_storage:/app/storage
     networks:
       - internal
-      - nginx
 
 networks:
   internal:
-  nginx:
-    external: true
+  # nginx:
+  #   external: true
 
 volumes:
   registry_storage:
