@@ -36,7 +36,10 @@ pub async fn register_handler(
 
     let password_hash = argon2
         .hash_password(payload.password.as_bytes(), &salt)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|e| {
+            tracing::error!("Password hashing failed: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .to_string();
 
     let result = sqlx::query(
@@ -51,7 +54,10 @@ pub async fn register_handler(
             tracing::info!("New user registered: {}", payload.username);
             Ok((StatusCode::CREATED, "User created successfully. You can now login."))
         }
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => {
+            tracing::error!("Registration database error: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
@@ -113,5 +119,8 @@ pub async fn logout_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     tracing::info!("User {} logged out.", user.username);
+    Ok((StatusCode::OK, "Logged out successfully."))
+}
+nfo!("User {} logged out.", user.username);
     Ok((StatusCode::OK, "Logged out successfully."))
 }
