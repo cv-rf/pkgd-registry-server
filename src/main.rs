@@ -64,29 +64,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
     
     sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS users (
+        "CREATE TABLE IF NOT EXISTS users (
             id BIGSERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             tier TEXT NOT NULL DEFAULT 'member',
             bio TEXT DEFAULT ''
-        );
-        CREATE TABLE IF NOT EXISTS api_tokens (
+        );"
+    )
+    .execute(&db_pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS api_tokens (
             token TEXT PRIMARY KEY,
             user_id BIGINT NOT NULL REFERENCES users(id)
-        );
-        CREATE TABLE IF NOT EXISTS package_owners (
+        );"
+    )
+    .execute(&db_pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS package_owners (
             package_name TEXT PRIMARY KEY,
             user_id BIGINT NOT NULL REFERENCES users(id)
-        );
-        CREATE TABLE IF NOT EXISTS packages (
+        );"
+    )
+    .execute(&db_pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS packages (
             name TEXT PRIMARY KEY,
             downloads BIGINT DEFAULT 0,
             is_verified BOOLEAN DEFAULT FALSE,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        "#
+        );"
     )
     .execute(&db_pool)
     .await?;
