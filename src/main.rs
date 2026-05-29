@@ -63,38 +63,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             e
         })?;
     
-    sqlx::query(
+    sqlx::raw_sql(
         "CREATE TABLE IF NOT EXISTS users (
             id BIGSERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             tier TEXT NOT NULL DEFAULT 'member',
             bio TEXT DEFAULT ''
-        );"
-    )
-    .execute(&db_pool)
-    .await?;
-
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS api_tokens (
+        );
+        CREATE TABLE IF NOT EXISTS api_tokens (
             token TEXT PRIMARY KEY,
             user_id BIGINT NOT NULL REFERENCES users(id)
-        );"
-    )
-    .execute(&db_pool)
-    .await?;
-
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS package_owners (
+        );
+        CREATE TABLE IF NOT EXISTS package_owners (
             package_name TEXT PRIMARY KEY,
             user_id BIGINT NOT NULL REFERENCES users(id)
-        );"
-    )
-    .execute(&db_pool)
-    .await?;
-
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS packages (
+        );
+        CREATE TABLE IF NOT EXISTS packages (
             name TEXT PRIMARY KEY,
             downloads BIGINT DEFAULT 0,
             is_verified BOOLEAN DEFAULT FALSE,
@@ -105,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
 
     let check_col = sqlx::query("SELECT updated_at FROM packages LIMIT 1")
-        .execute(&db_pool)
+        .fetch_optional(&db_pool)
         .await;
     
     if check_col.is_err() {
