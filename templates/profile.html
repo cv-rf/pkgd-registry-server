@@ -20,6 +20,14 @@
         .profile-header { display: flex; gap: 40px; align-items: center; margin-bottom: 40px; background: var(--atticl-gray); padding: 40px; border-radius: 12px; border: 1px solid var(--atticl-border); position: relative; overflow: hidden; }
         .profile-header::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--atticl-purple); }
         
+        @media (max-width: 768px) {
+            .profile-header { flex-direction: column; text-align: center; gap: 20px; padding: 40px 20px; }
+            .user-info h1 { justify-content: center; font-size: 2rem; }
+            .social-links { justify-content: center; flex-wrap: wrap; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .settings-btn { top: 10px; right: 10px; padding: 5px 10px; font-size: 0.8rem; }
+        }
+
         .avatar { width: 120px; height: 120px; border-radius: 60px; border: 3px solid var(--atticl-border); background: var(--atticl-black); object-fit: cover; }
         
         .user-info h1 { margin: 0; font-size: 2.5rem; display: flex; align-items: center; gap: 15px; }
