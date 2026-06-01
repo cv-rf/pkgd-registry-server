@@ -114,7 +114,12 @@
         {% if packages | length > 0 %}
             {% for pkg in packages %}
                 <a href="/packages/{{ pkg.name }}" class="package-card">
-                    <span class="package-name">{{ pkg.name }}</span>
+                    <span class="package-name">
+                        {{ pkg.name }}
+                        {% if pkg.is_verified %}
+                            <span class="material-symbols-outlined" style="color: var(--atticl-purple); font-size: 18px; vertical-align: middle; margin-left: 5px;">verified</span>
+                        {% endif %}
+                    </span>
                     <div class="package-meta">
                         <span style="display: flex; align-items: center; gap: 4px;">
                             <span class="material-symbols-outlined" style="font-size: 18px;">download</span>

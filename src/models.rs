@@ -105,6 +105,7 @@ pub struct PackageDisplay {
 pub struct ProfilePackage {
     pub name: String,
     pub downloads: i64,
+    pub is_verified: bool,
 }
 
 #[derive(Serialize, sqlx::FromRow)]

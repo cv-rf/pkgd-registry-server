@@ -109,15 +109,19 @@ pub async fn user_profile_web_handler(
     .unwrap_or_default();
 
     for pkg_name in package_names {
-        let downloads: i64 = sqlx::query_scalar("SELECT downloads FROM packages WHERE name = $1")
+        let pkg_data: (i64, bool) = sqlx::query_as("SELECT downloads, is_verified FROM packages WHERE name = $1")
             .bind(&pkg_name)
             .fetch_optional(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
-            .unwrap_or(0);
+            .unwrap_or((0, false));
         
-        total_downloads += downloads;
-        packages.push(ProfilePackage { name: pkg_name, downloads });
+        total_downloads += pkg_data.0;
+        packages.push(ProfilePackage { 
+            name: pkg_name, 
+            downloads: pkg_data.0,
+            is_verified: pkg_data.1,
+        });
     }
 
     let mut context = Context::new();
