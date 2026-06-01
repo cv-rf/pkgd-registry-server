@@ -1,12 +1,16 @@
 use axum::{
-    extract::State,
+    extract::{State, Path},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
 use std::sync::Arc;
+use sqlx::Row;
 use crate::state::{AppState, AuthenticatedUser};
-use crate::models::{AuthRequest, AuthResponse, BioRequest, ProfileEditResponse};
+use crate::models::{
+    AuthRequest, AuthResponse, BioRequest, ProfileEditResponse,
+    UpdateProfileRequest, UpdatePasswordRequest, CreateTokenRequest, TokenDisplay
+};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2
@@ -42,17 +46,40 @@ pub async fn register_handler(
         }
     };
 
+    // Simple Gravatar URL generation
+    let avatar_url = format!("https://www.gravatar.com/avatar/{:x}?d=identicon", md5::compute(payload.username.to_lowercase()));
+
     let result = sqlx::query(
-        "INSERT INTO users (username, password_hash) VALUES ($1, $2)")
+        "INSERT INTO users (username, password_hash, avatar_url) VALUES ($1, $2, $3) RETURNING id")
         .bind(&payload.username)
         .bind(&password_hash)
-        .execute(&state.db)
+        .bind(avatar_url)
+        .fetch_one(&state.db)
         .await;
 
     match result {
-        Ok(_) => {
+        Ok(row) => {
+            let user_id: i64 = row.get(0);
             tracing::info!("New user registered: {}", payload.username);
-            (StatusCode::CREATED, "User created successfully. You can now login.").into_response()
+            
+            // Auto-login after registration
+            let token: String = rand::thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(32)
+                .map(char::from)
+                .collect();
+
+            let _ = sqlx::query("INSERT INTO api_tokens (token, user_id, name) VALUES ($1, $2, $3)")
+                .bind(&token)
+                .bind(user_id)
+                .bind("Initial Session Token")
+                .execute(&state.db)
+                .await;
+
+            Json(AuthResponse {
+                token,
+                message: "User created and logged in successfully.".to_string(),
+            }).into_response()
         }
         Err(e) => {
             tracing::error!("Registration database error: {}", e);
@@ -104,9 +131,10 @@ pub async fn login_handler(
         .map(char::from)
         .collect();
 
-    sqlx::query("INSERT INTO api_tokens (token, user_id) VALUES ($1, $2)")
+    sqlx::query("INSERT INTO api_tokens (token, user_id, name) VALUES ($1, $2, $3)")
         .bind(&token)
         .bind(user_id)
+        .bind("Web Session")
         .execute(&state.db)
         .await
         .map_err(|e| {
@@ -176,6 +204,121 @@ pub async fn update_bio_handler(
         })?;
 
     Ok((StatusCode::OK, "Bio updated successfully."))
+}
+
+pub async fn update_profile_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<UpdateProfileRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    sqlx::query("UPDATE users SET bio = COALESCE($1, bio), github_url = $2, twitter_url = $3, website_url = $4 WHERE id = $5")
+        .bind(payload.bio)
+        .bind(payload.github_url)
+        .bind(payload.twitter_url)
+        .bind(payload.website_url)
+        .bind(user.id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update profile: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok((StatusCode::OK, "Profile updated successfully."))
+}
+
+pub async fn update_password_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<UpdatePasswordRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let stored_hash: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1")
+        .bind(user.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let parsed_hash = PasswordHash::new(&stored_hash)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if Argon2::default().verify_password(payload.old_password.as_bytes(), &parsed_hash).is_err() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let salt = SaltString::generate(&mut OsRng);
+    let new_hash = Argon2::default()
+        .hash_password(payload.new_password.as_bytes(), &salt)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .to_string();
+
+    sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+        .bind(new_hash)
+        .bind(user.id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::OK, "Password updated successfully."))
+}
+
+pub async fn list_tokens_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+) -> Result<Json<Vec<TokenDisplay>>, StatusCode> {
+    let tokens: Vec<TokenDisplay> = sqlx::query_as("SELECT token, name, created_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at DESC")
+        .bind(user.id)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(tokens))
+}
+
+pub async fn create_token_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<CreateTokenRequest>,
+) -> Result<Json<TokenDisplay>, StatusCode> {
+    let token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
+    
+    let name = if payload.name.trim().is_empty() { "New Token".to_string() } else { payload.name };
+    
+    let row: (String, String, chrono::NaiveDateTime) = sqlx::query_as("INSERT INTO api_tokens (token, user_id, name) VALUES ($1, $2, $3) RETURNING token, name, created_at")
+        .bind(&token)
+        .bind(user.id)
+        .bind(name)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(TokenDisplay {
+        token: row.0,
+        name: row.1,
+        created_at: row.2,
+    }))
+}
+
+pub async fn revoke_token_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(token): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let result = sqlx::query("DELETE FROM api_tokens WHERE token = $1 AND user_id = $2")
+        .bind(&token)
+        .bind(user.id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    Ok((StatusCode::OK, "Token revoked successfully."))
 }
 
 pub async fn regenerate_token_handler(

@@ -22,7 +22,12 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::state::AppState;
 use crate::utils::{build_initial_index, migrate_storage};
 use crate::handlers::{
-    auth::{login_handler, logout_handler, register_handler, get_profile_handler, update_bio_handler, regenerate_token_handler},
+    auth::{
+        login_handler, logout_handler, register_handler, get_profile_handler, 
+        update_bio_handler, regenerate_token_handler, update_profile_handler,
+        update_password_handler, list_tokens_handler, create_token_handler, revoke_token_handler
+    },
+
     package::{
         download_handler, package_latest_api_handler, package_version_api_handler,
         publish_handler, search_api_handler, delete_package_handler,
@@ -86,11 +91,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             tier TEXT NOT NULL DEFAULT 'member',
-            bio TEXT DEFAULT ''
+            bio TEXT DEFAULT '',
+            avatar_url TEXT,
+            github_url TEXT,
+            twitter_url TEXT,
+            website_url TEXT
         )",
         "CREATE TABLE IF NOT EXISTS api_tokens (
             token TEXT PRIMARY KEY,
-            user_id BIGINT NOT NULL REFERENCES users(id)
+            user_id BIGINT NOT NULL REFERENCES users(id),
+            name TEXT DEFAULT 'Default Token',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         "CREATE TABLE IF NOT EXISTS package_owners (
             package_name TEXT PRIMARY KEY,
@@ -144,9 +155,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
 
         if result.rows_affected() == 0 {
-            eprintln!("User '{}' not found.", username);
+            eprintln!("User \"{}\" not found.", username);
         } else {
-            println!("User '{}' upgraded to tier '{}'.", username, tier);
+            println!("User \"{}\" upgraded to tier \"{}\".", username, tier);
         }
         return Ok(());
     }
@@ -186,6 +197,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/profile", get(get_profile_handler))
         .route("/api/profile/bio", post(update_bio_handler))
         .route("/api/profile/token", post(regenerate_token_handler))
+        .route("/api/profile/update", post(update_profile_handler))
+        .route("/api/profile/password", post(update_password_handler))
+        .route("/api/profile/tokens", get(list_tokens_handler).post(create_token_handler))
+        .route("/api/profile/tokens/{token}", axum::routing::delete(revoke_token_handler))
         .route("/api/admin/dashboard", get(api_dashboard_handler))
         .route("/api/admin/users", get(api_list_users_handler))
         .route("/api/admin/verify", post(toggle_verify_handler))

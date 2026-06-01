@@ -83,20 +83,22 @@ pub async fn user_profile_web_handler(
     Path(username): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
-    let user_record: Option<(i64, String, String, String)> = sqlx::query_as(
-        "SELECT id, username, tier, bio FROM users WHERE username = $1"
+    let user_record: Option<(i64, String, String, String, Option<String>, Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT id, username, tier, bio, avatar_url, github_url, twitter_url, website_url FROM users WHERE username = $1"
     )
     .bind(&username)
     .fetch_optional(&state.db)
     .await
     .map_err(|_| AppError::InternalError("Database error".to_string()))?;
 
-    let (user_id, user_username, user_tier, user_bio) = match user_record {
+    let (user_id, user_username, user_tier, user_bio, avatar_url, github_url, twitter_url, website_url) = match user_record {
         Some(u) => u,
         None => return Ok(AppError::NotFound.into_response()),
     };
 
     let mut packages = Vec::new();
+    let mut total_downloads: i64 = 0;
+    
     let package_names: Vec<String> = sqlx::query_scalar(
         "SELECT package_name FROM package_owners WHERE user_id = $1"
     )
@@ -113,6 +115,7 @@ pub async fn user_profile_web_handler(
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .unwrap_or(0);
         
+        total_downloads += downloads;
         packages.push(ProfilePackage { name: pkg_name, downloads });
     }
 
@@ -120,7 +123,12 @@ pub async fn user_profile_web_handler(
     context.insert("username", &user_username);
     context.insert("tier", &user_tier);
     context.insert("bio", &user_bio);
+    context.insert("avatar_url", &avatar_url.unwrap_or_else(|| format!("https://www.gravatar.com/avatar/{:x}?d=identicon", md5::compute(user_username.to_lowercase()))));
+    context.insert("github_url", &github_url);
+    context.insert("twitter_url", &twitter_url);
+    context.insert("website_url", &website_url);
     context.insert("packages", &packages);
+    context.insert("total_downloads", &total_downloads);
 
     let html_content = state.tera.render("profile.html", &context)?;
     Ok(Html(html_content).into_response())

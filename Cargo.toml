@@ -11,7 +11,7 @@ serde_json = "1.0"
 tera = "1.20"
 sha2 = "0.11.0"
 hex = "0.4"
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio", "tls-rustls", "macros"] }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio", "tls-rustls", "macros", "chrono"] }
 argon2 = { version = "0.5", features = ["std"] }
 rand = "0.8"
 semver = "1.0"
@@ -21,3 +21,5 @@ tower-http = { version = "0.6.11", features = ["trace", "limit"] }
 tower = { version = "0.5.2" }
 tower_governor = "0.6.0"
 regex = "1.10"
+chrono = { version = "0.4.44", features = ["serde"] }
+md5 = "0.8.0"

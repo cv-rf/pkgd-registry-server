@@ -55,7 +55,38 @@ pub struct UserProfile {
     pub username: String,
     pub tier: UserTier,
     pub bio: String,
+    pub avatar_url: Option<String>,
+    pub github_url: Option<String>,
+    pub twitter_url: Option<String>,
+    pub website_url: Option<String>,
     pub packages: Vec<String>,
+    pub total_downloads: i64,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateProfileRequest {
+    pub bio: Option<String>,
+    pub github_url: Option<String>,
+    pub twitter_url: Option<String>,
+    pub website_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdatePasswordRequest {
+    pub old_password: String,
+    pub new_password: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateTokenRequest {
+    pub name: String,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct TokenDisplay {
+    pub token: String,
+    pub name: String,
+    pub created_at: chrono::NaiveDateTime,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
