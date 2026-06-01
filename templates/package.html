@@ -56,7 +56,14 @@
         </h1>
         
         <div class="meta-info">
-            <span>Version: <strong>{{ manifest.version }}</strong></span>
+            <span style="display: flex; align-items: center; gap: 8px;">
+                Version: 
+                <select onchange="window.location.href='/packages/{{ manifest.name }}/' + this.value" style="background: var(--atticl-black); color: var(--atticl-purple); border: 1px solid var(--atticl-border); border-radius: 4px; padding: 2px 8px; font-family: inherit; font-weight: 600; cursor: pointer; outline: none;">
+                    {% for v in versions %}
+                        <option value="{{ v }}" {% if v == manifest.version %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </span>
             <span>Author: <a href="/users/{{ manifest.author }}"><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">person</span> {{ manifest.author }}</a></span>
             <span style="display: flex; align-items: center; gap: 4px; color: var(--atticl-text-muted);">
                 <span class="material-symbols-outlined" style="font-size: 18px;">download</span> 
@@ -73,23 +80,6 @@
         <p style="margin-top: 30px; line-height: 1.6; color: #E0E0E0;">
             {{ manifest.description }}
         </p>
-
-        <h3 style="margin-top: 30px;"><span class="material-symbols-outlined" style="vertical-align: middle;">history</span> Version History</h3>
-        <div class="version-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
-            {% for v in versions %}
-                <div style="background: var(--atticl-black); padding: 12px 20px; border-radius: 8px; border: 1px solid var(--atticl-border); display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 600; color: {% if v == manifest.version %}var(--atticl-purple){% else %}var(--atticl-white){% endif %};">
-                        v{{ v }} {% if v == manifest.version %}<small style="font-weight: 400; color: var(--atticl-text-muted); margin-left: 10px;">(currently viewing)</small>{% endif %}
-                    </span>
-                    <div style="display: flex; gap: 15px; align-items: center;">
-                        <a href="/packages/{{ manifest.name }}/{{ v }}" style="color: var(--atticl-text-muted); text-decoration: none; font-size: 0.9rem; font-weight: 600;">View Details</a>
-                        <a href="/api/packages/{{ manifest.name }}/{{ v }}/download" style="background: var(--atticl-purple); color: white; padding: 5px 12px; border-radius: 4px; text-decoration: none; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 5px;">
-                            <span class="material-symbols-outlined" style="font-size: 16px;">download</span> Download
-                        </a>
-                    </div>
-                </div>
-            {% endfor %}
-        </div>
 
         {% if manifest.dependencies and manifest.dependencies | length > 0 %}
         <h3 style="margin-top: 30px;">Dependencies</h3>
