@@ -161,8 +161,6 @@ pub async fn package_latest_web_handler(Path(name): Path<String>) -> Result<Resp
     Ok(Redirect::temporary(&redirect_url).into_response())
 }
 
-use crate::utils::{get_latest_version, get_all_versions};
-
 pub async fn package_version_web_handler(
     Path((name, version)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
