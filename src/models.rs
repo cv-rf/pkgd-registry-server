@@ -66,6 +66,7 @@ pub struct UserProfile {
 #[derive(Deserialize)]
 pub struct UpdateProfileRequest {
     pub bio: Option<String>,
+    pub avatar_url: Option<String>,
     pub github_url: Option<String>,
     pub twitter_url: Option<String>,
     pub website_url: Option<String>,
@@ -134,6 +135,10 @@ pub struct ProfileEditResponse {
     pub username: String,
     pub tier: String,
     pub bio: String,
+    pub avatar_url: Option<String>,
+    pub github_url: Option<String>,
+    pub twitter_url: Option<String>,
+    pub website_url: Option<String>,
     pub token: String,
 }
 

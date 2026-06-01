@@ -74,6 +74,10 @@
                 <textarea id="bio" placeholder="Tell the world about yourself..."></textarea>
             </div>
             <div class="form-group">
+                <label>Avatar URL (Link to an image)</label>
+                <input type="text" id="avatar_url" placeholder="https://example.com/photo.jpg">
+            </div>
+            <div class="form-group">
                 <label>GitHub Profile URL</label>
                 <input type="text" id="github_url" placeholder="https://github.com/username">
             </div>
@@ -160,8 +164,10 @@
                 if (res.ok) {
                     const user = await res.json();
                     document.getElementById('bio').value = user.bio || '';
-                    // We need another endpoint or richer response to get social links initially
-                    // For now, we'll assume bio is working and we'll fetch full profile if needed
+                    document.getElementById('avatar_url').value = user.avatar_url || '';
+                    document.getElementById('github_url').value = user.github_url || '';
+                    document.getElementById('twitter_url').value = user.twitter_url || '';
+                    document.getElementById('website_url').value = user.website_url || '';
                 }
             } catch (err) { console.error(err); }
         }
@@ -169,6 +175,7 @@
         async function updateProfile() {
             const payload = {
                 bio: document.getElementById('bio').value,
+                avatar_url: document.getElementById('avatar_url').value,
                 github_url: document.getElementById('github_url').value,
                 twitter_url: document.getElementById('twitter_url').value,
                 website_url: document.getElementById('website_url').value,
@@ -184,8 +191,11 @@
                     body: JSON.stringify(payload)
                 });
 
-                if (res.ok) showMessage('Profile updated successfully!', 'success');
-                else showMessage('Failed to update profile.', 'error');
+                if (res.ok) {
+                    showMessage('Profile updated successfully!', 'success');
+                } else {
+                    showMessage('Failed to update profile.', 'error');
+                }
             } catch (err) { showMessage('An error occurred.', 'error'); }
         }
 

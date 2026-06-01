@@ -172,19 +172,25 @@ pub async fn get_profile_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<ProfileEditResponse>, StatusCode> {
-    let bio: String = sqlx::query_scalar("SELECT bio FROM users WHERE id = $1")
-        .bind(user.id)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch user bio: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let row: (String, String, Option<String>, Option<String>, Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT bio, tier, avatar_url, github_url, twitter_url, website_url FROM users WHERE id = $1"
+    )
+    .bind(user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to fetch user profile for settings: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok(Json(ProfileEditResponse {
         username: user.username,
-        tier: user.tier,
-        bio,
+        tier: row.1,
+        bio: row.0,
+        avatar_url: row.2,
+        github_url: row.3,
+        twitter_url: row.4,
+        website_url: row.5,
         token: user.token,
     }))
 }
@@ -212,8 +218,9 @@ pub async fn update_profile_handler(
     user: AuthenticatedUser,
     Json(payload): Json<UpdateProfileRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    sqlx::query("UPDATE users SET bio = COALESCE($1, bio), github_url = $2, twitter_url = $3, website_url = $4 WHERE id = $5")
+    sqlx::query("UPDATE users SET bio = COALESCE($1, bio), avatar_url = COALESCE($2, avatar_url), github_url = $3, twitter_url = $4, website_url = $5 WHERE id = $6")
         .bind(payload.bio)
+        .bind(payload.avatar_url)
         .bind(payload.github_url)
         .bind(payload.twitter_url)
         .bind(payload.website_url)
@@ -227,6 +234,7 @@ pub async fn update_profile_handler(
 
     Ok((StatusCode::OK, "Profile updated successfully."))
 }
+
 
 pub async fn update_password_handler(
     State(state): State<Arc<AppState>>,
