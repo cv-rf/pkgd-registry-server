@@ -167,3 +167,55 @@ pub async fn search_api_handler(
 
     Ok(Json(results))
 }
+
+pub async fn delete_package_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(name): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("User {} is attempting to delete package '{}'...", user.username, name);
+
+    let owner_id: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1")
+        .bind(&name)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    match owner_id {
+        Some(uid) if uid == user.id => {
+            // Authorized
+        }
+        Some(_) => {
+            tracing::warn!("User {} tried to delete '{}' which they do not own!", user.username, name);
+            return Err(StatusCode::FORBIDDEN);
+        }
+        None => {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
+    sqlx::query("DELETE FROM package_owners WHERE package_name = $1")
+        .bind(&name)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    sqlx::query("DELETE FROM packages WHERE name = $1")
+        .bind(&name)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    {
+        let mut index = state.package_index.write().await;
+        index.remove(&name);
+    }
+
+    let pkg_dir = format!("./storage/packages/{}", name);
+    if std::path::Path::new(&pkg_dir).exists() {
+        std::fs::remove_dir_all(pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    tracing::info!("Package '{}' deleted by user {}", name, user.username);
+    Ok((StatusCode::OK, "Package deleted successfully"))
+}

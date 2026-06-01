@@ -25,7 +25,7 @@ use crate::handlers::{
     auth::{login_handler, logout_handler, register_handler, get_profile_handler, update_bio_handler, regenerate_token_handler},
     package::{
         download_handler, package_latest_api_handler, package_version_api_handler,
-        publish_handler, search_api_handler,
+        publish_handler, search_api_handler, delete_package_handler,
     },
     web::{
         home_handler, login_page_handler, package_latest_web_handler,
@@ -195,7 +195,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/packages/{name}/{version}", get(package_version_web_handler))
         
         .route("/api/search", get(search_api_handler))
-        .route("/api/packages/{name}", get(package_latest_api_handler))
+        .route("/api/packages/{name}", get(package_latest_api_handler).delete(delete_package_handler))
         .route("/api/packages/{name}/{version}", get(package_version_api_handler))
 
         .route("/api/publish", post(publish_handler).layer(DefaultBodyLimit::max(50 * 1024 * 1024)))

@@ -77,6 +77,12 @@
 
         <h3 style="margin-top: 30px;">Raw JSON Manifest</h3>
         <pre><code>{{ raw_json }}</code></pre>
+
+        <div id="author-actions" style="margin-top: 30px; display: none; border-top: 1px solid var(--atticl-border); padding-top: 20px;">
+            <button onclick="deletePackage()" style="background-color: #ff4444; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined">delete</span> Delete Package
+            </button>
+        </div>
     </div>
 
     <script>
@@ -89,11 +95,37 @@
                 <a href="/users/${username}">My Profile</a>
                 <a onclick="logout()" style="cursor: pointer;">Logout</a>
             `;
+
+            if (username === "{{ manifest.author }}") {
+                document.getElementById('author-actions').style.display = 'block';
+            }
         } else {
             authNav.innerHTML = `
                 <a href="/login">Login</a>
                 <a href="/register" class="primary-btn">Register</a>
             `;
+        }
+
+        async function deletePackage() {
+            if (!confirm('Are you sure you want to delete this package? This action cannot be undone.')) {
+                return;
+            }
+
+            const token = localStorage.getItem('pkgd_token');
+            const res = await fetch('/api/packages/{{ manifest.name }}', {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (res.ok) {
+                alert('Package deleted successfully');
+                window.location.href = '/';
+            } else {
+                const text = await res.text();
+                alert('Failed to delete package: ' + text);
+            }
         }
 
         function logout() {
