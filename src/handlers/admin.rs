@@ -79,7 +79,7 @@ pub async fn api_list_users_handler(
     let search_pattern = format!("%{}%", search);
 
     let users: Vec<UserDisplay> = sqlx::query_as::<_, UserDisplay>(
-        "SELECT username, tier FROM users WHERE username ILIKE $1 ORDER BY username ASC LIMIT $2 OFFSET $3"
+        "SELECT username, tier, is_verified FROM users WHERE username ILIKE $1 ORDER BY username ASC LIMIT $2 OFFSET $3"
     )
     .bind(&search_pattern)
     .bind(limit)
