@@ -24,14 +24,12 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
             for (name, downloads, is_verified) in recent_packages {
                 if let Some(pkg) = index.get(&name) {
                     
-                    let author_tier: String = sqlx::query_scalar("SELECT tier FROM users WHERE username = $1")
+                    let is_author_verified: bool = sqlx::query_scalar("SELECT is_verified FROM users WHERE username = $1")
                         .bind(&pkg.author)
                         .fetch_optional(&state.db)
                         .await
                         .unwrap_or(None)
-                        .unwrap_or_else(|| "member".to_string());
-
-                    let is_author_verified = author_tier == "verified" || author_tier == "staff";
+                        .unwrap_or(false);
 
                     packages.push(PackageDisplay {
                         name: pkg.name.clone(),
@@ -84,15 +82,15 @@ pub async fn user_profile_web_handler(
     Path(username): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
-    let user_record: Option<(i64, String, String, String, Option<String>, Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT id, username, tier, bio, avatar_url, github_url, twitter_url, website_url FROM users WHERE username = $1"
+    let user_record: Option<(i64, String, String, String, Option<String>, Option<String>, Option<String>, Option<String>, bool)> = sqlx::query_as(
+        "SELECT id, username, tier, bio, avatar_url, github_url, twitter_url, website_url, is_verified FROM users WHERE username = $1"
     )
     .bind(&username)
     .fetch_optional(&state.db)
     .await
     .map_err(|_| AppError::InternalError("Database error".to_string()))?;
 
-    let (user_id, user_username, user_tier, user_bio, avatar_url, github_url, twitter_url, website_url) = match user_record {
+    let (user_id, user_username, user_tier, user_bio, avatar_url, github_url, twitter_url, website_url, is_verified) = match user_record {
         Some(u) => u,
         None => return Ok(AppError::NotFound.into_response()),
     };
@@ -132,6 +130,7 @@ pub async fn user_profile_web_handler(
     context.insert("github_url", &github_url);
     context.insert("twitter_url", &twitter_url);
     context.insert("website_url", &website_url);
+    context.insert("is_verified", &is_verified);
     context.insert("packages", &packages);
     context.insert("total_downloads", &total_downloads);
 

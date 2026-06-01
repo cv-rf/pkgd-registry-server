@@ -39,7 +39,7 @@ use crate::handlers::{
     },
     admin::{
         api_dashboard_handler, api_list_users_handler, toggle_verify_handler,
-        upgrade_user_handler, admin_delete_package_handler,
+        upgrade_user_handler, admin_delete_package_handler, toggle_user_verify_handler,
     },
 };
 
@@ -95,7 +95,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             avatar_url TEXT,
             github_url TEXT,
             twitter_url TEXT,
-            website_url TEXT
+            website_url TEXT,
+            is_verified BOOLEAN DEFAULT FALSE
         )",
         "CREATE TABLE IF NOT EXISTS api_tokens (
             token TEXT PRIMARY KEY,
@@ -132,6 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS github_url TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_url TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS website_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE",
         "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS name TEXT DEFAULT 'Default Token'",
         "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
@@ -211,6 +213,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/admin/dashboard", get(api_dashboard_handler))
         .route("/api/admin/users", get(api_list_users_handler))
         .route("/api/admin/verify", post(toggle_verify_handler))
+        .route("/api/admin/verify-user", post(toggle_user_verify_handler))
         .route("/api/admin/upgrade-user", post(upgrade_user_handler))
         .route("/api/admin/packages/{name}", axum::routing::delete(admin_delete_package_handler))
 

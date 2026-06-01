@@ -140,6 +140,7 @@
                 <thead>
                     <tr>
                         <th>Username</th>
+                        <th>Status</th>
                         <th>Current Tier</th>
                         <th>Change Tier</th>
                         <th>Actions</th>
@@ -295,7 +296,7 @@
             const tiers = ['member', 'supporter', 'partner', 'verified', 'staff'];
             
             if (users.length === 0) {
-                list.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--atticl-text-muted);">No users found.</td></tr>';
+                list.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--atticl-text-muted);">No users found.</td></tr>';
                 return;
             }
 
@@ -304,6 +305,9 @@
                     <td style="font-weight: 600;">
                         <a href="/users/${user.username}" style="color: var(--atticl-white); text-decoration: none;">${user.username}</a>
                     </td>
+                    <td>
+                        ${user.is_verified ? '<span class="material-symbols-outlined checkmark">verified</span>' : '<span style="color: var(--atticl-text-muted);">Unverified</span>'}
+                    </td>
                     <td><span class="badge" style="text-transform: capitalize;">${user.tier}</span></td>
                     <td>
                         <select id="tier-select-${user.username}">
@@ -311,12 +315,41 @@
                         </select>
                     </td>
                     <td>
-                        <button class="action-btn" onclick="updateTier('${user.username}')">
-                            <span class="material-symbols-outlined">upgrade</span> Update
-                        </button>
+                        <div class="action-btns">
+                            <button class="action-btn" onclick="updateTier('${user.username}')">
+                                <span class="material-symbols-outlined">upgrade</span> Update
+                            </button>
+                            <button class="verify-btn ${user.is_verified ? 'active' : ''}" onclick="toggleUserVerify('${user.username}', ${user.is_verified})">
+                                <span class="material-symbols-outlined">${user.is_verified ? 'verified' : 'new_releases'}</span>
+                                ${user.is_verified ? 'Unverify' : 'Verify'}
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        async function toggleUserVerify(username, currentStatus) {
+            const token = localStorage.getItem('pkgd_token');
+            try {
+                const res = await fetch('/api/admin/verify-user', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ username, verified: !currentStatus })
+                });
+
+                if (res.ok) {
+                    loadUsers();
+                } else {
+                    alert("Failed to update verification status.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("An error occurred.");
+            }
         }
 
         function updatePagination(type, data) {

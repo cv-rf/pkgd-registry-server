@@ -6,7 +6,10 @@ use axum::{
 };
 use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser};
-use crate::models::{PackageDisplay, UserDisplay, UpgradeRequest, VerifyRequest, AdminPaginationParams, PaginatedResponse};
+use crate::models::{
+    PackageDisplay, UserDisplay, UpgradeRequest, VerifyRequest, 
+    AdminPaginationParams, PaginatedResponse, UserVerifyRequest
+};
 
 pub async fn api_dashboard_handler(
     State(state): State<Arc<AppState>>,
@@ -171,6 +174,25 @@ pub async fn toggle_verify_handler(
     sqlx::query("UPDATE packages SET is_verified = $1 WHERE name = $2")
         .bind(payload.verified)
         .bind(&payload.name)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::OK)
+}
+
+pub async fn toggle_user_verify_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<UserVerifyRequest>,
+) -> Result<StatusCode, StatusCode> {
+    if user.tier != "staff" {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    sqlx::query("UPDATE users SET is_verified = $1 WHERE username = $2")
+        .bind(payload.verified)
+        .bind(&payload.username)
         .execute(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

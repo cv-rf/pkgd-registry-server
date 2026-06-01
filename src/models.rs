@@ -112,6 +112,7 @@ pub struct ProfilePackage {
 pub struct UserDisplay {
     pub username: String,
     pub tier: String,
+    pub is_verified: bool,
 }
 
 #[derive(Deserialize)]
@@ -123,6 +124,12 @@ pub struct UpgradeRequest {
 #[derive(Deserialize)]
 pub struct VerifyRequest {
     pub name: String,
+    pub verified: bool,
+}
+
+#[derive(Deserialize)]
+pub struct UserVerifyRequest {
+    pub username: String,
     pub verified: bool,
 }
 
@@ -140,6 +147,7 @@ pub struct ProfileEditResponse {
     pub github_url: Option<String>,
     pub twitter_url: Option<String>,
     pub website_url: Option<String>,
+    pub is_verified: bool,
     pub token: String,
 }
 

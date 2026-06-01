@@ -66,7 +66,7 @@
             <h1>
                 {{ username }}
                 <span class="badge">{{ tier }}</span>
-                {% if tier == "staff" or tier == "verified" %}
+                {% if is_verified or tier == "staff" %}
                     <span class="material-symbols-outlined" style="color: var(--atticl-purple);">verified</span>
                 {% endif %}
             </h1>
