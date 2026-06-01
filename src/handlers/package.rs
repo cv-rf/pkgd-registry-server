@@ -8,7 +8,41 @@ use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser};
 use crate::models::{PackageManifest, SearchParams};
 use crate::error::AppError;
-use crate::utils::{compute_checksum, get_latest_version};
+use crate::utils::{compute_checksum, get_latest_version, get_all_versions};
+
+pub async fn package_versions_list_api_handler(Path(name): Path<String>) -> Result<Json<Vec<String>>, AppError> {
+    let versions = get_all_versions(&name);
+    if versions.is_empty() {
+        return Err(AppError::NotFound);
+    }
+    Ok(Json(versions))
+}
+
+pub async fn package_version_download_handler(
+    State(state): State<Arc<AppState>>,
+    Path((name, version)): Path<(String, String)>,
+) -> Result<Response, AppError> {
+    let pkg_path = format!("./storage/packages/{}/{}/package.tar.gz", name, version);
+    if !std::path::Path::new(&pkg_path).exists() {
+        return Err(AppError::NotFound);
+    }
+
+    let file_bytes = std::fs::read(pkg_path)?;
+
+    sqlx::query("INSERT INTO packages (name, downloads) VALUES ($1, 1) ON CONFLICT(name) DO UPDATE SET downloads = packages.downloads + 1")
+        .bind(&name)
+        .execute(&state.db)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+    let filename = format!("{}-{}.tar.gz", name, version);
+    let headers = [
+        ("content-type", "application/gzip"),
+        ("content-disposition", &format!("attachment; filename=\"{}\"", filename)),
+    ];
+
+    Ok((headers, file_bytes).into_response())
+}
 
 pub async fn publish_handler(
     State(state): State<Arc<AppState>>,

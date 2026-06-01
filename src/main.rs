@@ -31,6 +31,7 @@ use crate::handlers::{
     package::{
         download_handler, package_latest_api_handler, package_version_api_handler,
         publish_handler, search_api_handler, delete_package_handler,
+        package_versions_list_api_handler, package_version_download_handler,
     },
     web::{
         home_handler, login_page_handler, package_latest_web_handler,
@@ -222,7 +223,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         .route("/api/search", get(search_api_handler))
         .route("/api/packages/{name}", get(package_latest_api_handler).delete(delete_package_handler))
+        .route("/api/packages/{name}/versions", get(package_versions_list_api_handler))
         .route("/api/packages/{name}/{version}", get(package_version_api_handler))
+        .route("/api/packages/{name}/{version}/download", get(package_version_download_handler))
 
         .route("/api/publish", post(publish_handler).layer(DefaultBodyLimit::max(50 * 1024 * 1024)))
         .route("/download/{file}", get(download_handler))

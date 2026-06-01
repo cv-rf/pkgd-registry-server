@@ -98,6 +98,24 @@ pub fn build_initial_index() -> HashMap<String, PackageManifest> {
     index
 }
 
+pub fn get_all_versions(pkg_name: &str) -> Vec<String> {
+    let mut versions = Vec::new();
+    let pkg_path = format!("./storage/packages/{}", pkg_name);
+    
+    if let Ok(entries) = std::fs::read_dir(pkg_path) {
+        for entry in entries.filter_map(Result::ok) {
+            if let Ok(version_str) = entry.file_name().into_string() {
+                if let Ok(version) = semver::Version::parse(&version_str) {
+                    versions.push(version);
+                }
+            }
+        }
+    }
+
+    versions.sort_by(|a, b| b.cmp(a)); // Newest first
+    versions.into_iter().map(|v| v.to_string()).collect()
+}
+
 pub fn get_latest_version(pkg_name: &str) -> Option<String> {
     let mut versions = Vec::new();
     let pkg_path = format!("./storage/packages/{}", pkg_name);

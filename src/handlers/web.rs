@@ -8,7 +8,7 @@ use tracing::error;
 use crate::state::AppState;
 use crate::error::AppError;
 use crate::models::{PackageDisplay, PackageManifest, ProfilePackage};
-use crate::utils::get_latest_version;
+use crate::utils::{get_latest_version, get_all_versions};
 use md5;
 
 pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
@@ -161,6 +161,8 @@ pub async fn package_latest_web_handler(Path(name): Path<String>) -> Result<Resp
     Ok(Redirect::temporary(&redirect_url).into_response())
 }
 
+use crate::utils::{get_latest_version, get_all_versions};
+
 pub async fn package_version_web_handler(
     Path((name, version)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
@@ -177,11 +179,14 @@ pub async fn package_version_web_handler(
         .map_err(|e| AppError::InternalError(e.to_string()))?
         .unwrap_or((0, false));
 
+    let versions = get_all_versions(&name);
+
     let mut context = Context::new();
     context.insert("manifest", &manifest);
     context.insert("raw_json", &raw_json);
     context.insert("downloads", &db_pkg.0);
     context.insert("is_verified", &db_pkg.1);
+    context.insert("versions", &versions);
 
     let html_content = state.tera.render("package.html", &context)?;
     Ok(Html(html_content).into_response())

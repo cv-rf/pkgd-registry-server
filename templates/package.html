@@ -74,6 +74,23 @@
             {{ manifest.description }}
         </p>
 
+        <h3 style="margin-top: 30px;"><span class="material-symbols-outlined" style="vertical-align: middle;">history</span> Version History</h3>
+        <div class="version-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+            {% for v in versions %}
+                <div style="background: var(--atticl-black); padding: 12px 20px; border-radius: 8px; border: 1px solid var(--atticl-border); display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 600; color: {% if v == manifest.version %}var(--atticl-purple){% else %}var(--atticl-white){% endif %};">
+                        v{{ v }} {% if v == manifest.version %}<small style="font-weight: 400; color: var(--atticl-text-muted); margin-left: 10px;">(currently viewing)</small>{% endif %}
+                    </span>
+                    <div style="display: flex; gap: 15px; align-items: center;">
+                        <a href="/packages/{{ manifest.name }}/{{ v }}" style="color: var(--atticl-text-muted); text-decoration: none; font-size: 0.9rem; font-weight: 600;">View Details</a>
+                        <a href="/api/packages/{{ manifest.name }}/{{ v }}/download" style="background: var(--atticl-purple); color: white; padding: 5px 12px; border-radius: 4px; text-decoration: none; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 5px;">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">download</span> Download
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
         {% if manifest.dependencies and manifest.dependencies | length > 0 %}
         <h3 style="margin-top: 30px;">Dependencies</h3>
         <ul style="list-style: none; padding: 0; display: flex; gap: 10px; flex-wrap: wrap;">
