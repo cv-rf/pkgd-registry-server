@@ -64,6 +64,17 @@
             {{ manifest.description }}
         </p>
 
+        {% if manifest.dependencies and manifest.dependencies | length > 0 %}
+        <h3 style="margin-top: 30px;">Dependencies</h3>
+        <ul style="list-style: none; padding: 0; display: flex; gap: 10px; flex-wrap: wrap;">
+            {% for dep in manifest.dependencies %}
+                <li style="background: #1A1A1A; padding: 5px 12px; border-radius: 4px; border: 1px solid var(--atticl-border);">
+                    <a href="/packages/{{ dep }}" style="color: var(--atticl-purple); text-decoration: none;">{{ dep }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
         <h3 style="margin-top: 30px;">Raw JSON Manifest</h3>
         <pre><code>{{ raw_json }}</code></pre>
     </div>
