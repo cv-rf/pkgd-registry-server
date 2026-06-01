@@ -17,6 +17,7 @@ use argon2::{
 };
 use rand::{distributions::Alphanumeric, Rng};
 use regex::Regex;
+use md5;
 
 pub async fn register_handler(
     State(state): State<Arc<AppState>>,

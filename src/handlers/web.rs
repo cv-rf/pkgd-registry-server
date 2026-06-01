@@ -9,6 +9,7 @@ use crate::state::AppState;
 use crate::error::AppError;
 use crate::models::{PackageDisplay, PackageManifest, ProfilePackage};
 use crate::utils::get_latest_version;
+use md5;
 
 pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
     let index = state.package_index.read().await;

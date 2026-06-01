@@ -125,44 +125,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?;
     }
 
-    // Migration for new user columns
-    let check_user_cols = sqlx::query("SELECT avatar_url FROM users LIMIT 1")
-        .fetch_optional(&db_pool)
-        .await;
-    
-    if check_user_cols.is_err() {
-        info!("Migrating users table with new profile columns...");
-        let migration_queries = [
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS github_url TEXT",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_url TEXT",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS website_url TEXT",
-        ];
-        for q in migration_queries {
-            let _ = sqlx::query(q).execute(&db_pool).await;
+    // Migration for new user and token columns - simplified and robust
+    info!("Ensuring database schema is up to date...");
+    let migrations = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS github_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS website_url TEXT",
+        "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS name TEXT DEFAULT 'Default Token'",
+        "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        "ALTER TABLE packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+    ];
+
+    for q in migrations {
+        if let Err(e) = sqlx::query(q).execute(&db_pool).await {
+            tracing::warn!("Migration query '{}' failed (possibly already applied): {}", q, e);
         }
-    }
-
-    // Migration for new api_token columns
-    let check_token_cols = sqlx::query("SELECT name FROM api_tokens LIMIT 1")
-        .fetch_optional(&db_pool)
-        .await;
-    
-    if check_token_cols.is_err() {
-        info!("Migrating api_tokens table with new columns...");
-        let _ = sqlx::query("ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS name TEXT DEFAULT 'Default Token'").execute(&db_pool).await;
-        let _ = sqlx::query("ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP").execute(&db_pool).await;
-    }
-
-    let check_col = sqlx::query("SELECT updated_at FROM packages LIMIT 1")
-        .fetch_optional(&db_pool)
-        .await;
-    
-    if check_col.is_err() {
-        info!("Adding updated_at column to packages table...");
-        let _ = sqlx::query("ALTER TABLE packages ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-            .execute(&db_pool)
-            .await;
     }
 
     migrate_storage();
