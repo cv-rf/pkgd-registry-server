@@ -34,7 +34,7 @@ use crate::handlers::{
     },
     admin::{
         api_dashboard_handler, api_list_users_handler, toggle_verify_handler,
-        upgrade_user_handler,
+        upgrade_user_handler, admin_delete_package_handler,
     },
 };
 
@@ -190,6 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/admin/users", get(api_list_users_handler))
         .route("/api/admin/verify", post(toggle_verify_handler))
         .route("/api/admin/upgrade-user", post(upgrade_user_handler))
+        .route("/api/admin/packages/{name}", axum::routing::delete(admin_delete_package_handler))
 
         .route("/packages/{name}", get(package_latest_web_handler))
         .route("/packages/{name}/{version}", get(package_version_web_handler))

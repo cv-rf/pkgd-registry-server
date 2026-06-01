@@ -1,26 +1,45 @@
 use axum::{
-    extract::State,
+    extract::{State, Query, Path},
     http::StatusCode,
     Json,
+    response::IntoResponse,
 };
 use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser};
-use crate::models::{PackageDisplay, UserDisplay, UpgradeRequest, VerifyRequest};
+use crate::models::{PackageDisplay, UserDisplay, UpgradeRequest, VerifyRequest, AdminPaginationParams, PaginatedResponse};
 
 pub async fn api_dashboard_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-) -> Result<Json<Vec<PackageDisplay>>, StatusCode> {
+    Query(params): Query<AdminPaginationParams>,
+) -> Result<Json<PaginatedResponse<PackageDisplay>>, StatusCode> {
     if user.tier != "staff" {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let mut packages = Vec::new();
-    let db_packages: Vec<(String, i64, bool)> = sqlx::query_as("SELECT name, downloads, is_verified FROM packages")
-        .fetch_all(&state.db)
+    let limit = params.limit.unwrap_or(10) as i64;
+    let page = params.page.unwrap_or(1);
+    let offset = ((page - 1) as i64) * limit;
+    let search = params.q.unwrap_or_default();
+    let search_pattern = format!("%{}%", search);
+
+    let db_packages: Vec<(String, i64, bool)> = sqlx::query_as(
+        "SELECT name, downloads, is_verified FROM packages WHERE name ILIKE $1 ORDER BY name ASC LIMIT $2 OFFSET $3"
+    )
+    .bind(&search_pattern)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM packages WHERE name ILIKE $1")
+        .bind(&search_pattern)
+        .fetch_one(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let mut packages = Vec::new();
     for (name, downloads, is_verified) in db_packages {
         packages.push(PackageDisplay {
             name,
@@ -29,27 +48,91 @@ pub async fn api_dashboard_handler(
             author: "".to_string(),
             downloads,
             is_verified,
-            is_author_verified: false, 
+            is_author_verified: false,
         });
     }
 
-    Ok(Json(packages))
+    Ok(Json(PaginatedResponse {
+        items: packages,
+        total,
+        page,
+        total_pages: ((total as f64) / (limit as f64)).ceil() as u32,
+    }))
 }
 
 pub async fn api_list_users_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-) -> Result<Json<Vec<UserDisplay>>, StatusCode> {
+    Query(params): Query<AdminPaginationParams>,
+) -> Result<Json<PaginatedResponse<UserDisplay>>, StatusCode> {
     if user.tier != "staff" {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let users: Vec<UserDisplay> = sqlx::query_as::<_, UserDisplay>("SELECT username, tier FROM users")
-        .fetch_all(&state.db)
+    let limit = params.limit.unwrap_or(10) as i64;
+    let page = params.page.unwrap_or(1);
+    let offset = ((page - 1) as i64) * limit;
+    let search = params.q.unwrap_or_default();
+    let search_pattern = format!("%{}%", search);
+
+    let users: Vec<UserDisplay> = sqlx::query_as::<_, UserDisplay>(
+        "SELECT username, tier FROM users WHERE username ILIKE $1 ORDER BY username ASC LIMIT $2 OFFSET $3"
+    )
+    .bind(&search_pattern)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE username ILIKE $1")
+        .bind(&search_pattern)
+        .fetch_one(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(users))
+    Ok(Json(PaginatedResponse {
+        items: users,
+        total,
+        page,
+        total_pages: ((total as f64) / (limit as f64)).ceil() as u32,
+    }))
+}
+
+pub async fn admin_delete_package_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(name): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if user.tier != "staff" {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    tracing::info!("Staff member {} is deleting package '{}'", user.username, name);
+
+    sqlx::query("DELETE FROM package_owners WHERE package_name = $1")
+        .bind(&name)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    sqlx::query("DELETE FROM packages WHERE name = $1")
+        .bind(&name)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    {
+        let mut index = state.package_index.write().await;
+        index.remove(&name);
+    }
+
+    let pkg_dir = format!("./storage/packages/{}", name);
+    if std::path::Path::new(&pkg_dir).exists() {
+        std::fs::remove_dir_all(pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    Ok((StatusCode::OK, "Package deleted successfully"))
 }
 
 pub async fn upgrade_user_handler(

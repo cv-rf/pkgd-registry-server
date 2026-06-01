@@ -105,3 +105,18 @@ pub struct ProfileEditResponse {
     pub bio: String,
     pub token: String,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct AdminPaginationParams {
+    pub q: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Serialize)]
+pub struct PaginatedResponse<T> {
+    pub items: Vec<T>,
+    pub total: i64,
+    pub page: u32,
+    pub total_pages: u32,
+}
