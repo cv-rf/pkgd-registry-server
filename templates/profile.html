@@ -71,7 +71,13 @@
                 {% endif %}
             </h1>
             
-            <p class="bio">{{ bio if bio else "No bio provided." }}</p>
+            <p class="bio">
+                {% if bio %}
+                    {{ bio }}
+                {% else %}
+                    No bio provided.
+                {% endif %}
+            </p>
             
             <div class="social-links">
                 {% if github_url %}
