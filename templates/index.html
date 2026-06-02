@@ -108,6 +108,15 @@
                         {% if pkg.is_verified %}
                             <span class="material-symbols-outlined" style="color: var(--atticl-purple); font-size: 18px; vertical-align: middle;">verified</span>
                         {% endif %}
+                        
+                        {% if pkg.safety_status == "safe" %}
+                            <span class="material-symbols-outlined" style="color: #00ff00; font-size: 18px; vertical-align: middle;" title="Safe (Malware scan passed)">check_circle</span>
+                        {% elif pkg.safety_status == "unsure" %}
+                            <span class="material-symbols-outlined" style="color: #ffaa00; font-size: 18px; vertical-align: middle;" title="Unsure (Manual review needed)">warning</span>
+                        {% elif pkg.safety_status == "malware" %}
+                            <span class="material-symbols-outlined" style="color: #ff0000; font-size: 18px; vertical-align: middle;" title="Blocked (Malware detected)">block</span>
+                        {% endif %}
+
                         <span style="color: var(--atticl-text-muted); font-size: 0.9rem; font-weight: 400;">v{{ pkg.version }}</span>
                     </a>
                     <div class="pkg-author">

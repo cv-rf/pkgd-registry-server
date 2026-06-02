@@ -101,6 +101,7 @@ pub struct PackageDisplay {
     pub downloads: i64,
     pub is_verified: bool,
     pub is_author_verified: bool,
+    pub safety_status: String,
 }
 
 #[derive(Serialize)]
@@ -108,6 +109,7 @@ pub struct ProfilePackage {
     pub name: String,
     pub downloads: i64,
     pub is_verified: bool,
+    pub safety_status: String,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -115,6 +117,7 @@ pub struct UserDisplay {
     pub username: String,
     pub tier: String,
     pub is_verified: bool,
+    pub is_suspended: bool,
 }
 
 #[derive(Deserialize)]
@@ -136,6 +139,18 @@ pub struct UserVerifyRequest {
 }
 
 #[derive(Deserialize)]
+pub struct UpdateSafetyRequest {
+    pub name: String,
+    pub safety_status: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateSuspensionRequest {
+    pub username: String,
+    pub is_suspended: bool,
+}
+
+#[derive(Deserialize)]
 pub struct BioRequest {
     pub bio: String,
 }
@@ -150,6 +165,7 @@ pub struct ProfileEditResponse {
     pub twitter_url: Option<String>,
     pub website_url: Option<String>,
     pub is_verified: bool,
+    pub is_suspended: bool,
     pub token: String,
 }
 

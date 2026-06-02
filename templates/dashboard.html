@@ -262,6 +262,8 @@
                 <tr>
                     <td style="font-weight: 600;">
                         <a href="/packages/${pkg.name}" style="color: var(--atticl-white); text-decoration: none;">${pkg.name}</a>
+                        ${pkg.safety_status === 'malware' ? '<span style="color: #ff0000; font-size: 0.7rem; margin-left: 5px;">[BLOCKED]</span>' : ''}
+                        ${pkg.safety_status === 'unsure' ? '<span style="color: #ffaa00; font-size: 0.7rem; margin-left: 5px;">[UNSURE]</span>' : ''}
                     </td>
                     <td>${pkg.downloads}</td>
                     <td>
@@ -273,6 +275,13 @@
                                 <span class="material-symbols-outlined">${pkg.is_verified ? 'verified' : 'new_releases'}</span>
                                 ${pkg.is_verified ? 'Unverify' : 'Verify'}
                             </button>
+                            
+                            ${pkg.safety_status !== 'safe' ? `
+                                <button class="action-btn" style="border-color: #00ff00; color: #00ff00;" onclick="updateSafety('${pkg.name}', 'safe')">
+                                    <span class="material-symbols-outlined">check_circle</span> Mark Safe
+                                </button>
+                            ` : ''}
+
                             <button class="delete-btn" onclick="adminDeletePackage('${pkg.name}')">
                                 <span class="material-symbols-outlined">delete</span>
                                 Delete
@@ -281,6 +290,29 @@
                     </td>
                 </tr>
             `).join('');
+        }
+
+        async function updateSafety(name, status) {
+            const token = localStorage.getItem('pkgd_token');
+            try {
+                const res = await fetch('/api/admin/safety', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name, safety_status: status })
+                });
+
+                if (res.ok) {
+                    loadPackages();
+                } else {
+                    alert("Failed to update safety status.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("An error occurred.");
+            }
         }
 
         async function loadUsers() {
@@ -321,6 +353,7 @@
                 <tr>
                     <td style="font-weight: 600;">
                         <a href="/users/${user.username}" style="color: var(--atticl-white); text-decoration: none;">${user.username}</a>
+                        ${user.is_suspended ? '<span style="color: #ff0000; font-size: 0.7rem; margin-left: 5px;">[SUSPENDED]</span>' : ''}
                     </td>
                     <td>
                         ${user.is_verified ? '<span class="material-symbols-outlined checkmark">verified</span>' : '<span style="color: var(--atticl-text-muted);">Unverified</span>'}
@@ -340,10 +373,37 @@
                                 <span class="material-symbols-outlined">${user.is_verified ? 'verified' : 'new_releases'}</span>
                                 ${user.is_verified ? 'Unverify' : 'Verify'}
                             </button>
+                            <button class="action-btn" style="border-color: ${user.is_suspended ? '#00ff00' : '#ff0000'}; color: ${user.is_suspended ? '#00ff00' : '#ff0000'};" onclick="toggleSuspension('${user.username}', ${user.is_suspended})">
+                                <span class="material-symbols-outlined">${user.is_suspended ? 'how_to_reg' : 'person_off'}</span>
+                                ${user.is_suspended ? 'Unsuspend' : 'Suspend'}
+                            </button>
                         </div>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        async function toggleSuspension(username, currentStatus) {
+            const token = localStorage.getItem('pkgd_token');
+            try {
+                const res = await fetch('/api/admin/suspend', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ username, is_suspended: !currentStatus })
+                });
+
+                if (res.ok) {
+                    loadUsers();
+                } else {
+                    alert("Failed to update suspension status.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("An error occurred.");
+            }
         }
 
         async function toggleUserVerify(username, currentStatus) {

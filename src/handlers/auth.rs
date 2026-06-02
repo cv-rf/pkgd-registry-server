@@ -173,8 +173,8 @@ pub async fn get_profile_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<ProfileEditResponse>, StatusCode> {
-    let row: (String, String, Option<String>, Option<String>, Option<String>, Option<String>, bool) = sqlx::query_as(
-        "SELECT bio, tier, avatar_url, github_url, twitter_url, website_url, is_verified FROM users WHERE id = $1"
+    let row: (String, String, Option<String>, Option<String>, Option<String>, Option<String>, bool, bool) = sqlx::query_as(
+        "SELECT bio, tier, avatar_url, github_url, twitter_url, website_url, is_verified, is_suspended FROM users WHERE id = $1"
     )
     .bind(user.id)
     .fetch_one(&state.db)
@@ -193,6 +193,7 @@ pub async fn get_profile_handler(
         twitter_url: row.4,
         website_url: row.5,
         is_verified: row.6,
+        is_suspended: row.7,
         token: user.token,
     }))
 }

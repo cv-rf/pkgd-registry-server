@@ -8,8 +8,53 @@ use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser};
 use crate::models::{
     PackageDisplay, UserDisplay, UpgradeRequest, VerifyRequest, 
-    AdminPaginationParams, PaginatedResponse, UserVerifyRequest
+    AdminPaginationParams, PaginatedResponse, UserVerifyRequest,
+    UpdateSafetyRequest, UpdateSuspensionRequest
 };
+
+pub async fn toggle_safety_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<UpdateSafetyRequest>,
+) -> Result<StatusCode, StatusCode> {
+    if user.tier != "staff" {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    sqlx::query("UPDATE packages SET safety_status = $1 WHERE name = $2")
+        .bind(&payload.safety_status)
+        .bind(&payload.name)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update safety status: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(StatusCode::OK)
+}
+
+pub async fn toggle_suspension_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<UpdateSuspensionRequest>,
+) -> Result<StatusCode, StatusCode> {
+    if user.tier != "staff" {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    sqlx::query("UPDATE users SET is_suspended = $1 WHERE username = $2")
+        .bind(payload.is_suspended)
+        .bind(&payload.username)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update suspension status: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(StatusCode::OK)
+}
 
 pub async fn api_dashboard_handler(
     State(state): State<Arc<AppState>>,
@@ -26,8 +71,8 @@ pub async fn api_dashboard_handler(
     let search = params.q.unwrap_or_default();
     let search_pattern = format!("%{}%", search);
 
-    let db_packages: Vec<(String, i64, bool)> = sqlx::query_as(
-        "SELECT name, downloads, is_verified FROM packages WHERE name ILIKE $1 ORDER BY name ASC LIMIT $2 OFFSET $3"
+    let db_packages: Vec<(String, i64, bool, String)> = sqlx::query_as(
+        "SELECT name, downloads, is_verified, safety_status FROM packages WHERE name ILIKE $1 ORDER BY name ASC LIMIT $2 OFFSET $3"
     )
     .bind(&search_pattern)
     .bind(limit)
@@ -43,7 +88,7 @@ pub async fn api_dashboard_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut packages = Vec::new();
-    for (name, downloads, is_verified) in db_packages {
+    for (name, downloads, is_verified, safety_status) in db_packages {
         packages.push(PackageDisplay {
             name,
             version: "".to_string(),
@@ -52,6 +97,7 @@ pub async fn api_dashboard_handler(
             downloads,
             is_verified,
             is_author_verified: false,
+            safety_status,
         });
     }
 
@@ -79,7 +125,7 @@ pub async fn api_list_users_handler(
     let search_pattern = format!("%{}%", search);
 
     let users: Vec<UserDisplay> = sqlx::query_as::<_, UserDisplay>(
-        "SELECT username, tier, is_verified FROM users WHERE username ILIKE $1 ORDER BY username ASC LIMIT $2 OFFSET $3"
+        "SELECT username, tier, is_verified, is_suspended FROM users WHERE username ILIKE $1 ORDER BY username ASC LIMIT $2 OFFSET $3"
     )
     .bind(&search_pattern)
     .bind(limit)

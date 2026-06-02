@@ -53,7 +53,31 @@
             {% if is_verified %}
                 <span class="material-symbols-outlined" style="color: var(--atticl-purple); font-size: 28px; vertical-align: middle;">verified</span>
             {% endif %}
+
+            {% if safety_status == "safe" %}
+                <span class="material-symbols-outlined" style="color: #00ff00; font-size: 28px; vertical-align: middle;" title="Safe (Malware scan passed)">check_circle</span>
+            {% elif safety_status == "unsure" %}
+                <span class="material-symbols-outlined" style="color: #ffaa00; font-size: 28px; vertical-align: middle;" title="Unsure (Manual review needed)">warning</span>
+            {% elif safety_status == "malware" %}
+                <span class="material-symbols-outlined" style="color: #ff0000; font-size: 28px; vertical-align: middle;" title="Blocked (Malware detected)">block</span>
+            {% endif %}
         </h1>
+
+        {% if safety_status == "malware" %}
+            <div style="background: rgba(255, 0, 0, 0.1); border: 1px solid #ff0000; color: #ff0000; padding: 15px; border-radius: 5px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                <span class="material-symbols-outlined">report</span>
+                <div>
+                    <strong>This package has been blocked.</strong> Malware or malicious patterns were detected. Installation is disabled.
+                </div>
+            </div>
+        {% elif safety_status == "unsure" %}
+            <div style="background: rgba(255, 170, 0, 0.1); border: 1px solid #ffaa00; color: #ffaa00; padding: 15px; border-radius: 5px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                <span class="material-symbols-outlined">info</span>
+                <div>
+                    <strong>Use with caution.</strong> Our automated scanner identified suspicious patterns. This package is awaiting manual review.
+                </div>
+            </div>
+        {% endif %}
         
         <div class="meta-info">
             <span style="display: flex; align-items: center; gap: 8px;">
@@ -73,8 +97,13 @@
 
         <h3>Install</h3>
         <div class="install-box">
-            <span>pkgd install {{ manifest.name }}</span>
-            <span class="material-symbols-outlined" style="color: var(--atticl-text-muted); cursor: pointer;" onclick="navigator.clipboard.writeText('pkgd install {{ manifest.name }}')">content_copy</span>
+            {% if safety_status == "malware" %}
+                <span style="color: #ff0000; font-weight: 600;">[ INSTALLATION BLOCKED ]</span>
+                <span class="material-symbols-outlined" style="color: #444;">block</span>
+            {% else %}
+                <span>pkgd install {{ manifest.name }}</span>
+                <span class="material-symbols-outlined" style="color: var(--atticl-text-muted); cursor: pointer;" onclick="navigator.clipboard.writeText('pkgd install {{ manifest.name }}')">content_copy</span>
+            {% endif %}
         </div>
         
         <p style="margin-top: 30px; line-height: 1.6; color: #E0E0E0;">

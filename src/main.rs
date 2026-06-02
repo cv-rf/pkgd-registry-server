@@ -3,6 +3,7 @@ mod models;
 mod state;
 mod utils;
 mod handlers;
+mod scanner;
 
 use axum::{
     routing::{get, post},
@@ -43,6 +44,7 @@ use crate::handlers::{
     admin::{
         api_dashboard_handler, api_list_users_handler, toggle_verify_handler,
         upgrade_user_handler, admin_delete_package_handler, toggle_user_verify_handler,
+        toggle_safety_handler, toggle_suspension_handler
     },
 };
 
@@ -98,7 +100,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             github_url TEXT,
             twitter_url TEXT,
             website_url TEXT,
-            is_verified BOOLEAN DEFAULT FALSE
+            is_verified BOOLEAN DEFAULT FALSE,
+            is_suspended BOOLEAN DEFAULT FALSE
         )",
         "CREATE TABLE IF NOT EXISTS api_tokens (
             token TEXT PRIMARY KEY,
@@ -114,6 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             name TEXT PRIMARY KEY,
             downloads BIGINT DEFAULT 0,
             is_verified BOOLEAN DEFAULT FALSE,
+            safety_status TEXT DEFAULT 'safe',
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         "CREATE TABLE IF NOT EXISTS user_public_keys (
@@ -143,9 +147,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_url TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS website_url TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN DEFAULT FALSE",
         "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS name TEXT DEFAULT 'Default Token'",
         "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        "ALTER TABLE packages ADD COLUMN IF NOT EXISTS safety_status TEXT DEFAULT 'safe'",
     ];
 
     for q in migrations {
@@ -226,6 +232,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/admin/users", get(api_list_users_handler))
         .route("/api/admin/verify", post(toggle_verify_handler))
         .route("/api/admin/verify-user", post(toggle_user_verify_handler))
+        .route("/api/admin/safety", post(toggle_safety_handler))
+        .route("/api/admin/suspend", post(toggle_suspension_handler))
         .route("/api/admin/upgrade-user", post(upgrade_user_handler))
         .route("/api/admin/packages/{name}", axum::routing::delete(admin_delete_package_handler))
 

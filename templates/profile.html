@@ -77,6 +77,9 @@
                 {% if is_verified or tier == "staff" %}
                     <span class="material-symbols-outlined" style="color: var(--atticl-purple);">verified</span>
                 {% endif %}
+                {% if is_suspended %}
+                    <span class="badge" style="background: rgba(255, 0, 0, 0.15); color: #ff0000; border-color: rgba(255, 0, 0, 0.3);">Suspended</span>
+                {% endif %}
             </h1>
             
             <p class="bio">
@@ -126,6 +129,14 @@
                         {{ pkg.name }}
                         {% if pkg.is_verified %}
                             <span class="material-symbols-outlined" style="color: var(--atticl-purple); font-size: 18px; vertical-align: middle; margin-left: 5px;">verified</span>
+                        {% endif %}
+
+                        {% if pkg.safety_status == "safe" %}
+                            <span class="material-symbols-outlined" style="color: #00ff00; font-size: 18px; vertical-align: middle;" title="Safe (Malware scan passed)">check_circle</span>
+                        {% elif pkg.safety_status == "unsure" %}
+                            <span class="material-symbols-outlined" style="color: #ffaa00; font-size: 18px; vertical-align: middle;" title="Unsure (Manual review needed)">warning</span>
+                        {% elif pkg.safety_status == "malware" %}
+                            <span class="material-symbols-outlined" style="color: #ff0000; font-size: 18px; vertical-align: middle;" title="Blocked (Malware detected)">block</span>
                         {% endif %}
                     </span>
                     <div class="package-meta">

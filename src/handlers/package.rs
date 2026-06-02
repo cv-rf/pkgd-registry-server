@@ -9,6 +9,7 @@ use crate::state::{AppState, AuthenticatedUser};
 use crate::models::{PackageManifest, SearchParams, AuthorKeysResponse, PublicKeyEntry};
 use crate::error::AppError;
 use crate::utils::{compute_checksum, get_latest_version, get_all_versions};
+use crate::scanner::scan_package;
 
 pub async fn package_versions_list_api_handler(Path(name): Path<String>) -> Result<Json<Vec<String>>, AppError> {
     let versions = get_all_versions(&name);
@@ -22,6 +23,18 @@ pub async fn package_version_download_handler(
     State(state): State<Arc<AppState>>,
     Path((name, version)): Path<(String, String)>,
 ) -> Result<Response, AppError> {
+    let safety: Option<String> = sqlx::query_scalar("SELECT safety_status FROM packages WHERE name = $1")
+        .bind(&name)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+    if let Some(status) = safety {
+        if status == "malware" {
+            return Err(AppError::InternalError("This package has been blocked due to malware detection.".to_string()));
+        }
+    }
+
     let pkg_path = format!("./storage/packages/{}/{}/package.tar.gz", name, version);
     if !std::path::Path::new(&pkg_path).exists() {
         return Err(AppError::NotFound);
@@ -67,6 +80,28 @@ pub async fn publish_handler(
     }
 
     if let (Some(manifest_str), Some(bytes)) = (manifest_json, file_bytes) {
+        // Malware scan before processing
+        let scan_result = scan_package(&bytes);
+        let safety_status = if scan_result.is_clean {
+            "safe"
+        } else if scan_result.threats.iter().any(|t| t.to_lowercase().contains("malware") || t.to_lowercase().contains("eicar")) {
+            "malware"
+        } else {
+            "unsure"
+        };
+
+        if safety_status == "malware" {
+            tracing::error!("CRITICAL: Malware detected in upload from user {}. Suspending user and blocking package.", user.username);
+            
+            // Suspend the user
+            let _ = sqlx::query("UPDATE users SET is_suspended = TRUE WHERE id = $1")
+                .bind(user.id)
+                .execute(&state.db)
+                .await;
+
+            return Err(StatusCode::FORBIDDEN);
+        }
+
         let mut manifest: PackageManifest = serde_json::from_str(&manifest_str)
             .map_err(|_| StatusCode::BAD_REQUEST)?;
 
@@ -91,8 +126,9 @@ pub async fn publish_handler(
             tracing::info!("User {} claimed ownership of new package '{}'", user.username, manifest.name);
         }
 
-        sqlx::query("INSERT INTO packages (name) VALUES ($1) ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP")
+        sqlx::query("INSERT INTO packages (name, safety_status) VALUES ($1, $2) ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP, safety_status = $2")
             .bind(&manifest.name)
+            .bind(safety_status)
             .execute(&state.db)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
