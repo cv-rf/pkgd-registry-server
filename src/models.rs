@@ -9,6 +9,8 @@ pub struct PackageManifest {
     pub checksum: Option<String>,
     #[serde(default)]
     pub dependencies: Option<Vec<String>>,
+    #[serde(default)]
+    pub signature: Option<String>,
 }
 
 #[derive(Deserialize)]

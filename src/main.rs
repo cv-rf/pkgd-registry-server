@@ -79,7 +79,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let db_pool = db_pool.unwrap();
     
-    // Use individual queries for better reliability and error reporting
     let tables = [
         "CREATE TABLE IF NOT EXISTS users (
             id BIGSERIAL PRIMARY KEY,
