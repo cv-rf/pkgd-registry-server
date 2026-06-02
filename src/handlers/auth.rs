@@ -9,7 +9,8 @@ use sqlx::Row;
 use crate::state::{AppState, AuthenticatedUser};
 use crate::models::{
     AuthRequest, AuthResponse, BioRequest, ProfileEditResponse,
-    UpdateProfileRequest, UpdatePasswordRequest, CreateTokenRequest, TokenDisplay
+    UpdateProfileRequest, UpdatePasswordRequest, CreateTokenRequest, TokenDisplay,
+    PublicKeyEntry, AddKeyRequest
 };
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
@@ -366,4 +367,69 @@ pub async fn regenerate_token_handler(
         token,
         message: "New token generated successfully. Previous token invalidated.".to_string(),
     }))
+}
+
+pub async fn list_public_keys_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+) -> Result<Json<Vec<PublicKeyEntry>>, StatusCode> {
+    let keys: Vec<PublicKeyEntry> = sqlx::query_as("SELECT key_name as name, public_key as key FROM user_public_keys WHERE user_id = $1 ORDER BY created_at DESC")
+        .bind(user.id)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to list public keys: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(keys))
+}
+
+pub async fn add_public_key_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<AddKeyRequest>,
+) -> Result<Json<PublicKeyEntry>, StatusCode> {
+    // Basic validation for hex string (32-byte Ed25519 public key = 64 hex chars)
+    if payload.public_key.len() != 64 || !payload.public_key.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let row: (String, String) = sqlx::query_as("INSERT INTO user_public_keys (user_id, key_name, public_key) VALUES ($1, $2, $3) RETURNING key_name, public_key")
+        .bind(user.id)
+        .bind(&payload.name)
+        .bind(&payload.public_key)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to add public key: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(PublicKeyEntry {
+        name: row.0,
+        key: row.1,
+    }))
+}
+
+pub async fn delete_public_key_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(key): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let result = sqlx::query("DELETE FROM user_public_keys WHERE user_id = $1 AND public_key = $2")
+        .bind(user.id)
+        .bind(&key)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete public key: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    Ok((StatusCode::OK, "Public key deleted successfully."))
 }

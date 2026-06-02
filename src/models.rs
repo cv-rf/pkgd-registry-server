@@ -167,3 +167,21 @@ pub struct PaginatedResponse<T> {
     pub page: u32,
     pub total_pages: u32,
 }
+
+#[derive(Serialize, Deserialize, sqlx::FromRow)]
+pub struct PublicKeyEntry {
+    pub name: String,
+    pub key: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AuthorKeysResponse {
+    pub author: String,
+    pub keys: Vec<PublicKeyEntry>,
+}
+
+#[derive(Deserialize)]
+pub struct AddKeyRequest {
+    pub name: String,
+    pub public_key: String,
+}

@@ -25,13 +25,15 @@ use crate::handlers::{
     auth::{
         login_handler, logout_handler, register_handler, get_profile_handler, 
         update_bio_handler, regenerate_token_handler, update_profile_handler,
-        update_password_handler, list_tokens_handler, create_token_handler, revoke_token_handler
+        update_password_handler, list_tokens_handler, create_token_handler, revoke_token_handler,
+        list_public_keys_handler, add_public_key_handler, delete_public_key_handler
     },
 
     package::{
         download_handler, package_latest_api_handler, package_version_api_handler,
         publish_handler, search_api_handler, delete_package_handler,
         package_versions_list_api_handler, package_version_download_handler,
+        get_author_keys_handler
     },
     web::{
         home_handler, login_page_handler, package_latest_web_handler,
@@ -113,8 +115,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             downloads BIGINT DEFAULT 0,
             is_verified BOOLEAN DEFAULT FALSE,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        "CREATE TABLE IF NOT EXISTS user_public_keys (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL REFERENCES users(id),
+            key_name TEXT NOT NULL,
+            public_key TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )"
-    ];
+        ];
 
     for table_query in tables {
         sqlx::query(table_query)
@@ -210,6 +219,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/profile/password", post(update_password_handler))
         .route("/api/profile/tokens", get(list_tokens_handler).post(create_token_handler))
         .route("/api/profile/tokens/{token}", axum::routing::delete(revoke_token_handler))
+        .route("/api/profile/keys", get(list_public_keys_handler).post(add_public_key_handler))
+        .route("/api/profile/keys/{key}", axum::routing::delete(delete_public_key_handler))
+        .route("/api/authors/{author_name}/keys", get(get_author_keys_handler))
         .route("/api/admin/dashboard", get(api_dashboard_handler))
         .route("/api/admin/users", get(api_list_users_handler))
         .route("/api/admin/verify", post(toggle_verify_handler))

@@ -73,6 +73,7 @@
             <div class="tab active" onclick="switchTab('profile')">Public Profile</div>
             <div class="tab" onclick="switchTab('account')">Account Security</div>
             <div class="tab" onclick="switchTab('tokens')">API Tokens</div>
+            <div class="tab" onclick="switchTab('keys')">Public Keys</div>
         </div>
 
         <div id="message"></div>
@@ -149,6 +150,28 @@
                 <!-- Tokens will be loaded here -->
             </div>
         </div>
+
+        <!-- Public Keys Tab -->
+        <div id="keys-content" class="tab-content">
+            <h3 style="margin-top: 0;">Public Keys (Ed25519)</h3>
+            <p style="color: var(--atticl-text-muted); font-size: 0.9rem; margin-bottom: 20px;">Add your public keys to sign and verify packages. Use your 32-byte hex-encoded Ed25519 public key.</p>
+            
+            <div class="form-group">
+                <label>Key Name (e.g. Work Laptop)</label>
+                <input type="text" id="key-name" placeholder="Laptop, Desktop, etc.">
+            </div>
+            <div class="form-group">
+                <label>Public Key (Hex String)</label>
+                <input type="text" id="public-key-val" placeholder="64 character hex string">
+            </div>
+            <button class="btn" onclick="addKey()">
+                <span class="material-symbols-outlined">add</span> Add New Key
+            </button>
+
+            <div class="token-list" id="key-list" style="margin-top: 30px;">
+                <!-- Keys will be loaded here -->
+            </div>
+        </div>
     </div>
 
     <script>
@@ -164,6 +187,79 @@
             document.getElementById(`${tab}-content`).classList.add('active');
 
             if (tab === 'tokens') loadTokens();
+            if (tab === 'keys') loadKeys();
+        }
+
+        async function loadKeys() {
+            const list = document.getElementById('key-list');
+            list.innerHTML = 'Loading keys...';
+            try {
+                const res = await fetch('/api/profile/keys', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const keys = await res.json();
+                    renderKeys(keys);
+                }
+            } catch (err) { list.innerHTML = 'Failed to load keys.'; }
+        }
+
+        function renderKeys(keys) {
+            const list = document.getElementById('key-list');
+            if (keys.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: var(--atticl-text-muted);">No public keys found.</p>';
+                return;
+            }
+            list.innerHTML = keys.map(k => `
+                <div class="token-item">
+                    <div class="token-info">
+                        <h4>${k.name}</h4>
+                        <p style="color: var(--atticl-purple); font-family: monospace; word-break: break-all;">${k.key}</p>
+                    </div>
+                    <button class="revoke-btn" onclick="deleteKey('${k.key}')">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">delete</span> Remove
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        async function addKey() {
+            const name = document.getElementById('key-name').value;
+            const public_key = document.getElementById('public-key-val').value;
+
+            if (!name || !public_key) return showMessage('Name and Public Key are required.', 'error');
+            if (public_key.length !== 64) return showMessage('Public key must be 64 characters (32-byte hex).', 'error');
+
+            try {
+                const res = await fetch('/api/profile/keys', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ name, public_key })
+                });
+
+                if (res.ok) {
+                    showMessage('Public key added successfully!', 'success');
+                    document.getElementById('key-name').value = '';
+                    document.getElementById('public-key-val').value = '';
+                    loadKeys();
+                } else {
+                    showMessage('Failed to add public key. Ensure it is a valid 64-character hex string.', 'error');
+                }
+            } catch (err) { showMessage('An error occurred.', 'error'); }
+        }
+
+        async function deleteKey(keyVal) {
+            if (!confirm('Are you sure you want to remove this public key?')) return;
+            try {
+                const res = await fetch(`/api/profile/keys/${keyVal}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) loadKeys();
+            } catch (err) { showMessage('Failed to delete key.', 'error'); }
         }
 
         async function loadProfile() {

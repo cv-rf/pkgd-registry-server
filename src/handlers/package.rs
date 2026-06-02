@@ -6,7 +6,7 @@ use axum::{
 };
 use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser};
-use crate::models::{PackageManifest, SearchParams};
+use crate::models::{PackageManifest, SearchParams, AuthorKeysResponse, PublicKeyEntry};
 use crate::error::AppError;
 use crate::utils::{compute_checksum, get_latest_version, get_all_versions};
 
@@ -252,4 +252,26 @@ pub async fn delete_package_handler(
 
     tracing::info!("Package '{}' deleted by user {}", name, user.username);
     Ok((StatusCode::OK, "Package deleted successfully"))
+}
+
+pub async fn get_author_keys_handler(
+    State(state): State<Arc<AppState>>,
+    Path(author_name): Path<String>,
+) -> Result<Json<AuthorKeysResponse>, AppError> {
+    let keys: Vec<PublicKeyEntry> = sqlx::query_as(
+        "SELECT uk.key_name as name, uk.public_key as key 
+         FROM user_public_keys uk
+         JOIN users u ON uk.user_id = u.id
+         WHERE u.username = $1
+         ORDER BY uk.created_at DESC"
+    )
+    .bind(&author_name)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+    Ok(Json(AuthorKeysResponse {
+        author: author_name,
+        keys,
+    }))
 }
