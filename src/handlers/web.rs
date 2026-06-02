@@ -107,31 +107,28 @@ pub async fn user_profile_web_handler(
     let mut packages = Vec::new();
     let mut total_downloads: i64 = 0;
     
-    let package_names: Vec<String> = sqlx::query_scalar(
-        "SELECT package_name FROM package_owners WHERE user_id = $1"
+    let db_packages: Vec<(String, String, i64, bool, String)> = sqlx::query_as(
+        "SELECT p.name, p.package_name, p.downloads, p.is_verified, p.safety_status 
+         FROM packages p
+         JOIN package_owners po ON p.name = po.package_name OR (p.package_name = po.package_name AND p.namespace = po.namespace)
+         WHERE po.user_id = $1
+         ORDER BY p.downloads DESC"
     )
     .bind(user_id)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
 
-    for pkg_name in package_names {
-        let pkg_data: (i64, bool, String) = sqlx::query_as("SELECT downloads, is_verified, safety_status FROM packages WHERE name = $1")
-            .bind(&pkg_name)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?
-            .unwrap_or((0, false, "safe".to_string()));
-        
-        let (namespace, package_name) = split_package_name(&pkg_name);
-        total_downloads += pkg_data.0;
+    for (full_name, pkg_name, downloads, is_verified, safety_status) in db_packages {
+        let (namespace, _) = split_package_name(&full_name);
+        total_downloads += downloads;
         packages.push(ProfilePackage { 
-            name: pkg_name, 
+            name: full_name, 
             namespace,
-            package_name,
-            downloads: pkg_data.0,
-            is_verified: pkg_data.1,
-            safety_status: pkg_data.2,
+            package_name: pkg_name,
+            downloads,
+            is_verified,
+            safety_status,
         });
     }
 

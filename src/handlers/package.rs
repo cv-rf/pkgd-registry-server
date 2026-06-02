@@ -320,12 +320,23 @@ pub async fn delete_package_handler(
 
     let (namespace, pkg_name) = split_package_name(&name);
 
-    let owner_id: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1 AND namespace = $2")
+    // Try finding owner with split name (modern namespacing)
+    let mut owner_id: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1 AND namespace = $2")
         .bind(&pkg_name)
         .bind(&namespace)
         .fetch_optional(&state.db)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+    // If not found, try finding owner with full name as package_name (legacy/migration edge case)
+    if owner_id.is_none() {
+        owner_id = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1")
+            .bind(&name)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten();
+    }
 
     match owner_id {
         Some(uid) if uid == user.id => {
@@ -336,13 +347,15 @@ pub async fn delete_package_handler(
             return Err(AppError::InternalError("Forbidden: You do not own this package.".to_string()));
         }
         None => {
+            tracing::warn!("Delete failed: Package '{}' (ns: {}, name: {}) not found in owners table.", name, namespace, pkg_name);
             return Err(AppError::NotFound);
         }
     }
 
-    sqlx::query("DELETE FROM package_owners WHERE package_name = $1 AND namespace = $2")
+    sqlx::query("DELETE FROM package_owners WHERE (package_name = $1 AND namespace = $2) OR package_name = $3")
         .bind(&pkg_name)
         .bind(&namespace)
+        .bind(&name)
         .execute(&state.db)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?;
