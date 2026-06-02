@@ -12,7 +12,6 @@ use crate::utils::{get_latest_version, get_all_versions};
 use md5;
 
 pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
-    let index = state.package_index.read().await;
     let mut packages = Vec::new();
     
     let recent_result = sqlx::query_as::<_, (String, i64, bool, String)>("SELECT name, downloads, is_verified, safety_status FROM packages ORDER BY updated_at DESC LIMIT 10")
@@ -21,6 +20,7 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
 
     match recent_result {
         Ok(recent_packages) => {
+            let index = state.package_index.read().await;
             for (name, downloads, is_verified, safety_status) in recent_packages {
                 if let Some(pkg) = index.get(&name) {
                     
@@ -28,7 +28,8 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
                         .bind(&pkg.author)
                         .fetch_optional(&state.db)
                         .await
-                        .unwrap_or(None)
+                        .ok()
+                        .flatten()
                         .unwrap_or(false);
 
                     packages.push(PackageDisplay {
@@ -46,7 +47,7 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
         },
         Err(e) => {
             error!("Database error in home_handler: {}", e);
-            
+            let index = state.package_index.read().await;
             for pkg in index.values().take(10) {
                 packages.push(PackageDisplay {
                     name: pkg.name.clone(),

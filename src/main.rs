@@ -63,23 +63,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/pkgd_registry".to_string());
 
+    tracing::info!("Starting initialization sequence...");
     tracing::info!("Connecting to database: {}", database_url);
 
     let mut db_pool = None;
-    for i in 1..=5 {
+    for i in 1..=30 {
         match PgPoolOptions::new()
-            .max_connections(5)
-            .acquire_timeout(std::time::Duration::from_secs(3))
+            .max_connections(10)
+            .acquire_timeout(std::time::Duration::from_secs(5))
             .connect(&database_url)
             .await
         {
             Ok(pool) => {
                 db_pool = Some(pool);
+                tracing::info!("Successfully connected to database on attempt {}", i);
                 break;
             }
             Err(e) => {
-                if i == 5 {
-                    tracing::error!("Failed to connect to database after 5 attempts: {}", e);
+                if i == 30 {
+                    tracing::error!("CRITICAL: Failed to connect to database after 30 attempts: {}", e);
                     return Err(e.into());
                 }
                 tracing::warn!("Database connection attempt {} failed: {}. Retrying in 2s...", i, e);
@@ -89,6 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let db_pool = db_pool.unwrap();
     
+    tracing::info!("Ensuring database tables exist...");
     let tables = [
         "CREATE TABLE IF NOT EXISTS users (
             id BIGSERIAL PRIMARY KEY,
@@ -140,7 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Migration for new user and token columns - simplified and robust
-    info!("Ensuring database schema is up to date...");
+    tracing::info!("Checking for schema migrations...");
     let migrations = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS github_url TEXT",
@@ -160,6 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    tracing::info!("Migrating local storage...");
     migrate_storage();
 
     if args.len() >= 4 && args[1] == "admin-upgrade" {
@@ -186,6 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    tracing::info!("Compiling templates and indexing packages...");
     let mut tera = Tera::new("templates/**/*").expect("Failed to compile templates");
     tera.autoescape_on(vec!["html", "xml"]);
     let initial_index = build_initial_index();
