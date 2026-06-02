@@ -168,22 +168,40 @@ pub async fn profile_edit_page_handler(
     Ok(Html(html_content))
 }
 
-pub async fn package_latest_web_handler(Path(name): Path<String>) -> Result<Response, AppError> {
-    let latest = get_latest_version(&name).ok_or(AppError::NotFound)?;
-    
-    let redirect_url = format!("/packages/{}/{}", name, latest);
-    Ok(Redirect::temporary(&redirect_url).into_response())
-}
-
-pub async fn package_version_web_handler(
+pub async fn package_web_handler(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
-    // path can be "@cvrf/router/1.0.0" or "router/1.0.0"
+    // path can be:
+    // "@cvrf/router" -> latest
+    // "@cvrf/router/1.0.0" -> specific version
+    // "router" -> latest (@global)
+    // "router/1.0.0" -> specific version (@global)
+
+    // Check if the last part is a version
     let (name, version) = if let Some(idx) = path.rfind('/') {
-        (&path[..idx], &path[idx+1..])
+        let potential_version = &path[idx+1..];
+        // If it starts with @ and only has one slash, it's just the name (e.g. @cvrf/router)
+        if path.starts_with('@') && path.chars().filter(|&c| c == '/').count() == 1 {
+            (path.as_str(), None)
+        } else if !path.starts_with('@') && path.chars().filter(|&c| c == '/').count() == 0 {
+            // Should not happen with rfind, but for safety
+            (path.as_str(), None)
+        } else {
+            // It has enough slashes to potentially have a version
+            if semver::Version::parse(potential_version).is_ok() {
+                (&path[..idx], Some(potential_version))
+            } else {
+                (path.as_str(), None)
+            }
+        }
     } else {
-        return Err(AppError::NotFound);
+        (path.as_str(), None)
+    };
+
+    let version = match version {
+        Some(v) => v.to_string(),
+        None => get_latest_version(name).ok_or(AppError::NotFound)?,
     };
 
     let (namespace, pkg_name) = split_package_name(name);

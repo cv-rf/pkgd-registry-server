@@ -1,15 +1,61 @@
 use axum::{
     extract::{Multipart, Path, State, Query},
-    http::StatusCode,
+    http::{StatusCode, Method},
     response::{IntoResponse, Response},
     Json,
 };
 use std::sync::Arc;
-use crate::state::{AppState, AuthenticatedUser};
+use crate::state::{AppState, AuthenticatedUser, OptionalAuthenticatedUser};
 use crate::models::{PackageManifest, SearchParams, AuthorKeysResponse, PublicKeyEntry};
 use crate::error::AppError;
 use crate::utils::{compute_checksum, get_latest_version, get_all_versions, split_package_name};
 use crate::scanner::scan_package;
+
+pub async fn package_api_handler(
+    State(state): State<Arc<AppState>>,
+    method: Method,
+    OptionalAuthenticatedUser(user): OptionalAuthenticatedUser,
+    Path(path): Path<String>,
+) -> Result<Response, AppError> {
+    // Dispatch based on path and method
+    
+    // 1. Download: "@cvrf/router/1.0.0/download" or "router/1.0.0/download"
+    if path.ends_with("/download") {
+        let trimmed_path = &path[..path.len() - 9]; // Remove "/download"
+        if let Some(idx) = trimmed_path.rfind('/') {
+             let name = &trimmed_path[..idx];
+             let version = &trimmed_path[idx+1..];
+             
+             return package_version_download_handler(State(state), Path((name.to_string(), version.to_string()))).await;
+        }
+    }
+
+    // 2. Versions: "@cvrf/router/versions" or "router/versions"
+    if path.ends_with("/versions") {
+        let name = &path[..path.len() - 9]; // Remove "/versions"
+        return package_versions_list_api_handler(Path(name.to_string())).await.map(|j| j.into_response());
+    }
+
+    // 3. Delete: DELETE "@cvrf/router" or "router"
+    if method == Method::DELETE {
+        let user = user.ok_or(AppError::InternalError("Unauthorized: Missing or invalid token".to_string()))?; 
+        return delete_package_handler(State(state), user, Path(path)).await.map(|r| r.into_response());
+    }
+
+    // 4. Specific Version Manifest: "@cvrf/router/1.0.0" or "router/1.0.0"
+    if let Some(idx) = path.rfind('/') {
+        let potential_version = &path[idx+1..];
+        let is_namespaced_only = path.starts_with('@') && path.chars().filter(|&c| c == '/').count() == 1;
+        
+        if !is_namespaced_only && semver::Version::parse(potential_version).is_ok() {
+            let name = &path[..idx];
+            return package_version_api_handler(Path((name.to_string(), potential_version.to_string()))).await;
+        }
+    }
+
+    // 5. Latest Manifest: "@cvrf/router" or "router"
+    package_latest_api_handler(Path(path)).await
+}
 
 pub async fn package_versions_list_api_handler(Path(name): Path<String>) -> Result<Json<Vec<String>>, AppError> {
     let versions = get_all_versions(&name);
@@ -18,6 +64,7 @@ pub async fn package_versions_list_api_handler(Path(name): Path<String>) -> Resu
     }
     Ok(Json(versions))
 }
+
 
 pub async fn package_version_download_handler(
     State(state): State<Arc<AppState>>,
@@ -268,7 +315,7 @@ pub async fn delete_package_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path(name): Path<String>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, AppError> {
     tracing::info!("User {} is attempting to delete package '{}'...", user.username, name);
 
     let (namespace, pkg_name) = split_package_name(&name);
@@ -278,7 +325,7 @@ pub async fn delete_package_handler(
         .bind(&namespace)
         .fetch_optional(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
 
     match owner_id {
         Some(uid) if uid == user.id => {
@@ -286,10 +333,10 @@ pub async fn delete_package_handler(
         }
         Some(_) => {
             tracing::warn!("User {} tried to delete '{}' which they do not own!", user.username, name);
-            return Err(StatusCode::FORBIDDEN);
+            return Err(AppError::InternalError("Forbidden: You do not own this package.".to_string()));
         }
         None => {
-            return Err(StatusCode::NOT_FOUND);
+            return Err(AppError::NotFound);
         }
     }
 
@@ -298,13 +345,13 @@ pub async fn delete_package_handler(
         .bind(&namespace)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
 
     sqlx::query("DELETE FROM packages WHERE name = $1")
         .bind(&name)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
 
     {
         let mut index = state.package_index.write().await;
@@ -313,7 +360,7 @@ pub async fn delete_package_handler(
 
     let pkg_dir = format!("./storage/packages/{}/{}", namespace, pkg_name);
     if std::path::Path::new(&pkg_dir).exists() {
-        std::fs::remove_dir_all(pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        std::fs::remove_dir_all(pkg_dir).map_err(|e| AppError::InternalError(e.to_string()))?;
     }
 
     tracing::info!("Package '{}' deleted by user {}", name, user.username);

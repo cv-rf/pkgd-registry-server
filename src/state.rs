@@ -24,6 +24,8 @@ pub struct AuthenticatedUser {
     pub token: String,
 }
 
+pub struct OptionalAuthenticatedUser(pub Option<AuthenticatedUser>);
+
 impl FromRequestParts<Arc<AppState>> for AuthenticatedUser {
     type Rejection = StatusCode;
 
@@ -46,5 +48,14 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedUser {
 
         user.token = token.to_string();
         Ok(user)
+    }
+}
+
+impl FromRequestParts<Arc<AppState>> for OptionalAuthenticatedUser {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, state: &Arc<AppState>) -> Result<Self, Self::Rejection> {
+        let res = AuthenticatedUser::from_request_parts(parts, state).await.ok();
+        Ok(OptionalAuthenticatedUser(res))
     }
 }
