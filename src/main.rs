@@ -22,10 +22,16 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::state::AppState;
 use crate::utils::{build_initial_index, migrate_storage};
 use crate::handlers::{
-    auth::{login_handler, logout_handler, register_handler, get_profile_handler, update_bio_handler, regenerate_token_handler},
+    auth::{
+        login_handler, logout_handler, register_handler, get_profile_handler, 
+        update_bio_handler, regenerate_token_handler, update_profile_handler,
+        update_password_handler, list_tokens_handler, create_token_handler, revoke_token_handler
+    },
+
     package::{
         download_handler, package_latest_api_handler, package_version_api_handler,
-        publish_handler, search_api_handler,
+        publish_handler, search_api_handler, delete_package_handler,
+        package_versions_list_api_handler, package_version_download_handler,
     },
     web::{
         home_handler, login_page_handler, package_latest_web_handler,
@@ -34,7 +40,7 @@ use crate::handlers::{
     },
     admin::{
         api_dashboard_handler, api_list_users_handler, toggle_verify_handler,
-        upgrade_user_handler,
+        upgrade_user_handler, admin_delete_package_handler, toggle_user_verify_handler,
     },
 };
 
@@ -85,11 +91,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             tier TEXT NOT NULL DEFAULT 'member',
-            bio TEXT DEFAULT ''
+            bio TEXT DEFAULT '',
+            avatar_url TEXT,
+            github_url TEXT,
+            twitter_url TEXT,
+            website_url TEXT,
+            is_verified BOOLEAN DEFAULT FALSE
         )",
         "CREATE TABLE IF NOT EXISTS api_tokens (
             token TEXT PRIMARY KEY,
-            user_id BIGINT NOT NULL REFERENCES users(id)
+            user_id BIGINT NOT NULL REFERENCES users(id),
+            name TEXT DEFAULT 'Default Token',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         "CREATE TABLE IF NOT EXISTS package_owners (
             package_name TEXT PRIMARY KEY,
@@ -113,15 +126,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?;
     }
 
-    let check_col = sqlx::query("SELECT updated_at FROM packages LIMIT 1")
-        .fetch_optional(&db_pool)
-        .await;
-    
-    if check_col.is_err() {
-        info!("Adding updated_at column to packages table...");
-        let _ = sqlx::query("ALTER TABLE packages ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-            .execute(&db_pool)
-            .await;
+    // Migration for new user and token columns - simplified and robust
+    info!("Ensuring database schema is up to date...");
+    let migrations = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS github_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS website_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS name TEXT DEFAULT 'Default Token'",
+        "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        "ALTER TABLE packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+    ];
+
+    for q in migrations {
+        if let Err(e) = sqlx::query(q).execute(&db_pool).await {
+            tracing::warn!("Migration query '{}' failed (possibly already applied): {}", q, e);
+        }
     }
 
     migrate_storage();
@@ -143,9 +164,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
 
         if result.rows_affected() == 0 {
-            eprintln!("User '{}' not found.", username);
+            eprintln!("User \"{}\" not found.", username);
         } else {
-            println!("User '{}' upgraded to tier '{}'.", username, tier);
+            println!("User \"{}\" upgraded to tier \"{}\".", username, tier);
         }
         return Ok(());
     }
@@ -185,17 +206,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/profile", get(get_profile_handler))
         .route("/api/profile/bio", post(update_bio_handler))
         .route("/api/profile/token", post(regenerate_token_handler))
+        .route("/api/profile/update", post(update_profile_handler))
+        .route("/api/profile/password", post(update_password_handler))
+        .route("/api/profile/tokens", get(list_tokens_handler).post(create_token_handler))
+        .route("/api/profile/tokens/{token}", axum::routing::delete(revoke_token_handler))
         .route("/api/admin/dashboard", get(api_dashboard_handler))
         .route("/api/admin/users", get(api_list_users_handler))
         .route("/api/admin/verify", post(toggle_verify_handler))
+        .route("/api/admin/verify-user", post(toggle_user_verify_handler))
         .route("/api/admin/upgrade-user", post(upgrade_user_handler))
+        .route("/api/admin/packages/{name}", axum::routing::delete(admin_delete_package_handler))
 
         .route("/packages/{name}", get(package_latest_web_handler))
         .route("/packages/{name}/{version}", get(package_version_web_handler))
         
         .route("/api/search", get(search_api_handler))
-        .route("/api/packages/{name}", get(package_latest_api_handler))
+        .route("/api/packages/{name}", get(package_latest_api_handler).delete(delete_package_handler))
+        .route("/api/packages/{name}/versions", get(package_versions_list_api_handler))
         .route("/api/packages/{name}/{version}", get(package_version_api_handler))
+        .route("/api/packages/{name}/{version}/download", get(package_version_download_handler))
 
         .route("/api/publish", post(publish_handler).layer(DefaultBodyLimit::max(50 * 1024 * 1024)))
         .route("/download/{file}", get(download_handler))

@@ -8,7 +8,41 @@ use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser};
 use crate::models::{PackageManifest, SearchParams};
 use crate::error::AppError;
-use crate::utils::{compute_checksum, get_latest_version};
+use crate::utils::{compute_checksum, get_latest_version, get_all_versions};
+
+pub async fn package_versions_list_api_handler(Path(name): Path<String>) -> Result<Json<Vec<String>>, AppError> {
+    let versions = get_all_versions(&name);
+    if versions.is_empty() {
+        return Err(AppError::NotFound);
+    }
+    Ok(Json(versions))
+}
+
+pub async fn package_version_download_handler(
+    State(state): State<Arc<AppState>>,
+    Path((name, version)): Path<(String, String)>,
+) -> Result<Response, AppError> {
+    let pkg_path = format!("./storage/packages/{}/{}/package.tar.gz", name, version);
+    if !std::path::Path::new(&pkg_path).exists() {
+        return Err(AppError::NotFound);
+    }
+
+    let file_bytes = std::fs::read(pkg_path)?;
+
+    sqlx::query("INSERT INTO packages (name, downloads) VALUES ($1, 1) ON CONFLICT(name) DO UPDATE SET downloads = packages.downloads + 1")
+        .bind(&name)
+        .execute(&state.db)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+    let filename = format!("{}-{}.tar.gz", name, version);
+    let headers = [
+        ("content-type", "application/gzip"),
+        ("content-disposition", &format!("attachment; filename=\"{}\"", filename)),
+    ];
+
+    Ok((headers, file_bytes).into_response())
+}
 
 pub async fn publish_handler(
     State(state): State<Arc<AppState>>,
@@ -166,4 +200,56 @@ pub async fn search_api_handler(
         .collect();
 
     Ok(Json(results))
+}
+
+pub async fn delete_package_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(name): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    tracing::info!("User {} is attempting to delete package '{}'...", user.username, name);
+
+    let owner_id: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1")
+        .bind(&name)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    match owner_id {
+        Some(uid) if uid == user.id => {
+            // Authorized
+        }
+        Some(_) => {
+            tracing::warn!("User {} tried to delete '{}' which they do not own!", user.username, name);
+            return Err(StatusCode::FORBIDDEN);
+        }
+        None => {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
+    sqlx::query("DELETE FROM package_owners WHERE package_name = $1")
+        .bind(&name)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    sqlx::query("DELETE FROM packages WHERE name = $1")
+        .bind(&name)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    {
+        let mut index = state.package_index.write().await;
+        index.remove(&name);
+    }
+
+    let pkg_dir = format!("./storage/packages/{}", name);
+    if std::path::Path::new(&pkg_dir).exists() {
+        std::fs::remove_dir_all(pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    tracing::info!("Package '{}' deleted by user {}", name, user.username);
+    Ok((StatusCode::OK, "Package deleted successfully"))
 }

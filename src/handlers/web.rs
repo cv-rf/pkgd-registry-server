@@ -8,7 +8,8 @@ use tracing::error;
 use crate::state::AppState;
 use crate::error::AppError;
 use crate::models::{PackageDisplay, PackageManifest, ProfilePackage};
-use crate::utils::get_latest_version;
+use crate::utils::{get_latest_version, get_all_versions};
+use md5;
 
 pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
     let index = state.package_index.read().await;
@@ -23,14 +24,12 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
             for (name, downloads, is_verified) in recent_packages {
                 if let Some(pkg) = index.get(&name) {
                     
-                    let author_tier: String = sqlx::query_scalar("SELECT tier FROM users WHERE username = $1")
+                    let is_author_verified: bool = sqlx::query_scalar("SELECT is_verified FROM users WHERE username = $1")
                         .bind(&pkg.author)
                         .fetch_optional(&state.db)
                         .await
                         .unwrap_or(None)
-                        .unwrap_or_else(|| "member".to_string());
-
-                    let is_author_verified = author_tier == "verified" || author_tier == "staff";
+                        .unwrap_or(false);
 
                     packages.push(PackageDisplay {
                         name: pkg.name.clone(),
@@ -83,20 +82,22 @@ pub async fn user_profile_web_handler(
     Path(username): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
-    let user_record: Option<(i64, String, String, String)> = sqlx::query_as(
-        "SELECT id, username, tier, bio FROM users WHERE username = $1"
+    let user_record: Option<(i64, String, String, String, Option<String>, Option<String>, Option<String>, Option<String>, bool)> = sqlx::query_as(
+        "SELECT id, username, tier, bio, avatar_url, github_url, twitter_url, website_url, is_verified FROM users WHERE username = $1"
     )
     .bind(&username)
     .fetch_optional(&state.db)
     .await
     .map_err(|_| AppError::InternalError("Database error".to_string()))?;
 
-    let (user_id, user_username, user_tier, user_bio) = match user_record {
+    let (user_id, user_username, user_tier, user_bio, avatar_url, github_url, twitter_url, website_url, is_verified) = match user_record {
         Some(u) => u,
         None => return Ok(AppError::NotFound.into_response()),
     };
 
     let mut packages = Vec::new();
+    let mut total_downloads: i64 = 0;
+    
     let package_names: Vec<String> = sqlx::query_scalar(
         "SELECT package_name FROM package_owners WHERE user_id = $1"
     )
@@ -106,21 +107,32 @@ pub async fn user_profile_web_handler(
     .unwrap_or_default();
 
     for pkg_name in package_names {
-        let downloads: i64 = sqlx::query_scalar("SELECT downloads FROM packages WHERE name = $1")
+        let pkg_data: (i64, bool) = sqlx::query_as("SELECT downloads, is_verified FROM packages WHERE name = $1")
             .bind(&pkg_name)
             .fetch_optional(&state.db)
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?
-            .unwrap_or(0);
+            .unwrap_or((0, false));
         
-        packages.push(ProfilePackage { name: pkg_name, downloads });
+        total_downloads += pkg_data.0;
+        packages.push(ProfilePackage { 
+            name: pkg_name, 
+            downloads: pkg_data.0,
+            is_verified: pkg_data.1,
+        });
     }
 
     let mut context = Context::new();
     context.insert("username", &user_username);
     context.insert("tier", &user_tier);
     context.insert("bio", &user_bio);
+    context.insert("avatar_url", &avatar_url.unwrap_or_else(|| format!("https://www.gravatar.com/avatar/{:x}?d=identicon", md5::compute(user_username.to_lowercase()))));
+    context.insert("github_url", &github_url);
+    context.insert("twitter_url", &twitter_url);
+    context.insert("website_url", &website_url);
+    context.insert("is_verified", &is_verified);
     context.insert("packages", &packages);
+    context.insert("total_downloads", &total_downloads);
 
     let html_content = state.tera.render("profile.html", &context)?;
     Ok(Html(html_content).into_response())
@@ -165,11 +177,14 @@ pub async fn package_version_web_handler(
         .map_err(|e| AppError::InternalError(e.to_string()))?
         .unwrap_or((0, false));
 
+    let versions = get_all_versions(&name);
+
     let mut context = Context::new();
     context.insert("manifest", &manifest);
     context.insert("raw_json", &raw_json);
     context.insert("downloads", &db_pkg.0);
     context.insert("is_verified", &db_pkg.1);
+    context.insert("versions", &versions);
 
     let html_content = state.tera.render("package.html", &context)?;
     Ok(Html(html_content).into_response())

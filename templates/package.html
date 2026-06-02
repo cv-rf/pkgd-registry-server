@@ -18,15 +18,25 @@
         .nav-links .primary-btn { background-color: var(--atticl-purple); padding: 8px 16px; border-radius: 5px; }
 
         .card { background-color: var(--atticl-gray); padding: 30px; border-radius: 8px; border: 1px solid var(--atticl-border); }
-        h1 { margin-top: 0; display: flex; align-items: center; gap: 10px; }
+        h1 { margin-top: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         
-        .meta-info { display: flex; gap: 20px; color: var(--atticl-text-muted); margin-bottom: 20px; border-bottom: 1px solid var(--atticl-border); padding-bottom: 20px; }
+        .meta-info { display: flex; gap: 20px; color: var(--atticl-text-muted); margin-bottom: 20px; border-bottom: 1px solid var(--atticl-border); padding-bottom: 20px; flex-wrap: wrap; }
         .meta-info a { color: var(--atticl-purple); text-decoration: none; font-weight: 600; }
         .meta-info a:hover { text-decoration: underline; }
 
-        .install-box { background-color: #000; padding: 15px; border-radius: 5px; border: 1px solid var(--atticl-border); font-family: monospace; display: flex; justify-content: space-between; align-items: center; }
+        .install-box { background-color: #000; padding: 15px; border-radius: 5px; border: 1px solid var(--atticl-border); font-family: monospace; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         
-        pre { background-color: var(--atticl-black); padding: 15px; border-radius: 5px; border: 1px solid var(--atticl-border); overflow-x: auto; font-size: 0.9rem; color: var(--atticl-text-muted); margin-top: 30px;}
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .card { padding: 20px; }
+            h1 { font-size: 1.5rem; }
+            nav { flex-direction: column; gap: 15px; text-align: center; }
+            .meta-info { gap: 10px; font-size: 0.85rem; }
+            .install-box { font-size: 0.8rem; flex-direction: column; align-items: flex-start; }
+            .install-box .material-symbols-outlined { align-self: flex-end; }
+        }
+
+        pre { background-color: var(--atticl-black); padding: 15px; border-radius: 5px; border: 1px solid var(--atticl-border); overflow-x: auto; font-size: 0.8rem; color: var(--atticl-text-muted); margin-top: 30px;}
     </style>
 </head>
 <body>
@@ -46,7 +56,14 @@
         </h1>
         
         <div class="meta-info">
-            <span>Version: <strong>{{ manifest.version }}</strong></span>
+            <span style="display: flex; align-items: center; gap: 8px;">
+                Version: 
+                <select onchange="window.location.href='/packages/{{ manifest.name }}/' + this.value" style="background: var(--atticl-black); color: var(--atticl-purple); border: 1px solid var(--atticl-border); border-radius: 4px; padding: 2px 8px; font-family: inherit; font-weight: 600; cursor: pointer; outline: none;">
+                    {% for v in versions %}
+                        <option value="{{ v }}" {% if v == manifest.version %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </span>
             <span>Author: <a href="/users/{{ manifest.author }}"><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">person</span> {{ manifest.author }}</a></span>
             <span style="display: flex; align-items: center; gap: 4px; color: var(--atticl-text-muted);">
                 <span class="material-symbols-outlined" style="font-size: 18px;">download</span> 
@@ -77,6 +94,12 @@
 
         <h3 style="margin-top: 30px;">Raw JSON Manifest</h3>
         <pre><code>{{ raw_json }}</code></pre>
+
+        <div id="author-actions" style="margin-top: 30px; display: none; border-top: 1px solid var(--atticl-border); padding-top: 20px;">
+            <button onclick="deletePackage()" style="background-color: #ff4444; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined">delete</span> Delete Package
+            </button>
+        </div>
     </div>
 
     <script>
@@ -89,11 +112,37 @@
                 <a href="/users/${username}">My Profile</a>
                 <a onclick="logout()" style="cursor: pointer;">Logout</a>
             `;
+
+            if (username === "{{ manifest.author }}") {
+                document.getElementById('author-actions').style.display = 'block';
+            }
         } else {
             authNav.innerHTML = `
                 <a href="/login">Login</a>
                 <a href="/register" class="primary-btn">Register</a>
             `;
+        }
+
+        async function deletePackage() {
+            if (!confirm('Are you sure you want to delete this package? This action cannot be undone.')) {
+                return;
+            }
+
+            const token = localStorage.getItem('pkgd_token');
+            const res = await fetch('/api/packages/{{ manifest.name }}', {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (res.ok) {
+                alert('Package deleted successfully');
+                window.location.href = '/';
+            } else {
+                const text = await res.text();
+                alert('Failed to delete package: ' + text);
+            }
         }
 
         function logout() {

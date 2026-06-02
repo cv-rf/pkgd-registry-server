@@ -5,10 +5,11 @@ WORKDIR /app
 # Install system dependencies
 RUN apk add --no-cache musl-dev pkgconfig openssl-dev gcc
 
-# Copy only the dependency files to cache them
+# Create a dummy project to cache dependencies
 COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
 
-# Build the release binary
+# Copy the actual source code and build the real binary
 COPY . .
 RUN cargo build --release
 

@@ -57,7 +57,39 @@ pub struct UserProfile {
     pub username: String,
     pub tier: UserTier,
     pub bio: String,
+    pub avatar_url: Option<String>,
+    pub github_url: Option<String>,
+    pub twitter_url: Option<String>,
+    pub website_url: Option<String>,
     pub packages: Vec<String>,
+    pub total_downloads: i64,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateProfileRequest {
+    pub bio: Option<String>,
+    pub avatar_url: Option<String>,
+    pub github_url: Option<String>,
+    pub twitter_url: Option<String>,
+    pub website_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdatePasswordRequest {
+    pub old_password: String,
+    pub new_password: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateTokenRequest {
+    pub name: String,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct TokenDisplay {
+    pub token: String,
+    pub name: String,
+    pub created_at: chrono::NaiveDateTime,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -75,12 +107,14 @@ pub struct PackageDisplay {
 pub struct ProfilePackage {
     pub name: String,
     pub downloads: i64,
+    pub is_verified: bool,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
 pub struct UserDisplay {
     pub username: String,
     pub tier: String,
+    pub is_verified: bool,
 }
 
 #[derive(Deserialize)]
@@ -96,6 +130,12 @@ pub struct VerifyRequest {
 }
 
 #[derive(Deserialize)]
+pub struct UserVerifyRequest {
+    pub username: String,
+    pub verified: bool,
+}
+
+#[derive(Deserialize)]
 pub struct BioRequest {
     pub bio: String,
 }
@@ -105,5 +145,25 @@ pub struct ProfileEditResponse {
     pub username: String,
     pub tier: String,
     pub bio: String,
+    pub avatar_url: Option<String>,
+    pub github_url: Option<String>,
+    pub twitter_url: Option<String>,
+    pub website_url: Option<String>,
+    pub is_verified: bool,
     pub token: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AdminPaginationParams {
+    pub q: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Serialize)]
+pub struct PaginatedResponse<T> {
+    pub items: Vec<T>,
+    pub total: i64,
+    pub page: u32,
+    pub total_pages: u32,
 }
