@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser};
 use crate::models::{PackageManifest, SearchParams, AuthorKeysResponse, PublicKeyEntry};
 use crate::error::AppError;
-use crate::utils::{compute_checksum, get_latest_version, get_all_versions};
+use crate::utils::{compute_checksum, get_latest_version, get_all_versions, split_package_name};
 use crate::scanner::scan_package;
 
 pub async fn package_versions_list_api_handler(Path(name): Path<String>) -> Result<Json<Vec<String>>, AppError> {
@@ -23,6 +23,7 @@ pub async fn package_version_download_handler(
     State(state): State<Arc<AppState>>,
     Path((name, version)): Path<(String, String)>,
 ) -> Result<Response, AppError> {
+    let (namespace, pkg_name) = split_package_name(&name);
     let safety: Option<String> = sqlx::query_scalar("SELECT safety_status FROM packages WHERE name = $1")
         .bind(&name)
         .fetch_optional(&state.db)
@@ -35,20 +36,23 @@ pub async fn package_version_download_handler(
         }
     }
 
-    let pkg_path = format!("./storage/packages/{}/{}/package.tar.gz", name, version);
+    let pkg_path = format!("./storage/packages/{}/{}/{}/package.tar.gz", namespace, pkg_name, version);
     if !std::path::Path::new(&pkg_path).exists() {
         return Err(AppError::NotFound);
     }
 
     let file_bytes = std::fs::read(pkg_path)?;
 
-    sqlx::query("INSERT INTO packages (name, downloads) VALUES ($1, 1) ON CONFLICT(name) DO UPDATE SET downloads = packages.downloads + 1")
+    sqlx::query("INSERT INTO packages (name, namespace, package_name, downloads) VALUES ($1, $2, $3, 1) ON CONFLICT(name) DO UPDATE SET downloads = packages.downloads + 1")
         .bind(&name)
+        .bind(&namespace)
+        .bind(&pkg_name)
         .execute(&state.db)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-    let filename = format!("{}-{}.tar.gz", name, version);
+    let display_name = name.replace('/', "-");
+    let filename = format!("{}-{}.tar.gz", display_name, version);
     let headers = [
         ("content-type", "application/gzip"),
         ("content-disposition", &format!("attachment; filename=\"{}\"", filename)),
@@ -80,6 +84,25 @@ pub async fn publish_handler(
     }
 
     if let (Some(manifest_str), Some(bytes)) = (manifest_json, file_bytes) {
+        let mut manifest: PackageManifest = serde_json::from_str(&manifest_str)
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+        let (namespace, pkg_name) = split_package_name(&manifest.name);
+        
+        // Authorization: User must own the namespace
+        // Rule: Every user owns @username. Only staff/verified can publish to @global or other system namespaces.
+        let user_namespace = format!("@{}", user.username);
+        if namespace != user_namespace && namespace != "@global" {
+             tracing::warn!("User {} tried to publish to unauthorized namespace '{}'", user.username, namespace);
+             return Err(StatusCode::FORBIDDEN);
+        }
+
+        // Additional check for @global: Only verified or staff
+        if namespace == "@global" && user.tier != "staff" && user.tier != "verified" {
+             tracing::warn!("User {} tried to publish to @global but is not authorized.", user.username);
+             return Err(StatusCode::FORBIDDEN);
+        }
+
         // Malware scan before processing
         let scan_result = scan_package(&bytes);
         let safety_status = if scan_result.is_clean {
@@ -102,11 +125,9 @@ pub async fn publish_handler(
             return Err(StatusCode::FORBIDDEN);
         }
 
-        let mut manifest: PackageManifest = serde_json::from_str(&manifest_str)
-            .map_err(|_| StatusCode::BAD_REQUEST)?;
-
-        let owner: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1")
-            .bind(&manifest.name)
+        let owner: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1 AND namespace = $2")
+            .bind(&pkg_name)
+            .bind(&namespace)
             .fetch_optional(&state.db)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -117,8 +138,9 @@ pub async fn publish_handler(
                 return Err(StatusCode::FORBIDDEN)
             }
         } else {
-            sqlx::query("INSERT INTO package_owners (package_name, user_id) VALUES ($1, $2)")
-                .bind(&manifest.name)
+            sqlx::query("INSERT INTO package_owners (package_name, namespace, user_id) VALUES ($1, $2, $3)")
+                .bind(&pkg_name)
+                .bind(&namespace)
                 .bind(user.id)
                 .execute(&state.db)
                 .await
@@ -126,8 +148,10 @@ pub async fn publish_handler(
             tracing::info!("User {} claimed ownership of new package '{}'", user.username, manifest.name);
         }
 
-        sqlx::query("INSERT INTO packages (name, safety_status) VALUES ($1, $2) ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP, safety_status = $2")
+        sqlx::query("INSERT INTO packages (name, namespace, package_name, safety_status) VALUES ($1, $2, $3, $4) ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP, safety_status = $4, namespace = $2, package_name = $3")
             .bind(&manifest.name)
+            .bind(&namespace)
+            .bind(&pkg_name)
             .bind(safety_status)
             .execute(&state.db)
             .await
@@ -136,7 +160,7 @@ pub async fn publish_handler(
         let hash = compute_checksum(&bytes);
         manifest.checksum = Some(hash);
 
-        let pkg_dir = format!("./storage/packages/{}/{}", manifest.name, manifest.version);
+        let pkg_dir = format!("./storage/packages/{}/{}/{}", namespace, pkg_name, manifest.version);
         std::fs::create_dir_all(&pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         std::fs::write(format!("{}/package.tar.gz", pkg_dir), bytes)
@@ -200,7 +224,8 @@ pub async fn download_handler(
 
 pub async fn package_latest_api_handler(Path(name): Path<String>) -> Result<Response, AppError> {
     let latest = get_latest_version(&name).ok_or(AppError::NotFound)?;
-    let manifest_path = format!("./storage/packages/{}/{}/package.json", name, latest);
+    let (namespace, pkg_name) = split_package_name(&name);
+    let manifest_path = format!("./storage/packages/{}/{}/{}/package.json", namespace, pkg_name, latest);
     
     let raw_json = std::fs::read_to_string(manifest_path)?;
     let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
@@ -211,7 +236,8 @@ pub async fn package_latest_api_handler(Path(name): Path<String>) -> Result<Resp
 pub async fn package_version_api_handler(
     Path((name, version)): Path<(String, String)>
 ) -> Result<Response, AppError> {
-    let manifest_path = format!("./storage/packages/{}/{}/package.json", name, version);
+    let (namespace, pkg_name) = split_package_name(&name);
+    let manifest_path = format!("./storage/packages/{}/{}/{}/package.json", namespace, pkg_name, version);
     
     let raw_json = std::fs::read_to_string(manifest_path)?;
     let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
@@ -245,8 +271,11 @@ pub async fn delete_package_handler(
 ) -> Result<impl IntoResponse, StatusCode> {
     tracing::info!("User {} is attempting to delete package '{}'...", user.username, name);
 
-    let owner_id: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1")
-        .bind(&name)
+    let (namespace, pkg_name) = split_package_name(&name);
+
+    let owner_id: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1 AND namespace = $2")
+        .bind(&pkg_name)
+        .bind(&namespace)
         .fetch_optional(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -264,8 +293,9 @@ pub async fn delete_package_handler(
         }
     }
 
-    sqlx::query("DELETE FROM package_owners WHERE package_name = $1")
-        .bind(&name)
+    sqlx::query("DELETE FROM package_owners WHERE package_name = $1 AND namespace = $2")
+        .bind(&pkg_name)
+        .bind(&namespace)
         .execute(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -281,7 +311,7 @@ pub async fn delete_package_handler(
         index.remove(&name);
     }
 
-    let pkg_dir = format!("./storage/packages/{}", name);
+    let pkg_dir = format!("./storage/packages/{}/{}", namespace, pkg_name);
     if std::path::Path::new(&pkg_dir).exists() {
         std::fs::remove_dir_all(pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }

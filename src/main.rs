@@ -113,11 +113,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         "CREATE TABLE IF NOT EXISTS package_owners (
-            package_name TEXT PRIMARY KEY,
-            user_id BIGINT NOT NULL REFERENCES users(id)
+            package_name TEXT NOT NULL,
+            namespace TEXT NOT NULL DEFAULT '@global',
+            user_id BIGINT NOT NULL REFERENCES users(id),
+            PRIMARY KEY (package_name, namespace)
         )",
         "CREATE TABLE IF NOT EXISTS packages (
             name TEXT PRIMARY KEY,
+            namespace TEXT DEFAULT '@global',
+            package_name TEXT,
             downloads BIGINT DEFAULT 0,
             is_verified BOOLEAN DEFAULT FALSE,
             safety_status TEXT DEFAULT 'safe',
@@ -155,6 +159,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE packages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         "ALTER TABLE packages ADD COLUMN IF NOT EXISTS safety_status TEXT DEFAULT 'safe'",
+        "ALTER TABLE packages ADD COLUMN IF NOT EXISTS namespace TEXT DEFAULT '@global'",
+        "ALTER TABLE packages ADD COLUMN IF NOT EXISTS package_name TEXT",
+        "ALTER TABLE package_owners ADD COLUMN IF NOT EXISTS namespace TEXT DEFAULT '@global'",
     ];
 
     for q in migrations {
@@ -242,14 +249,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/admin/upgrade-user", post(upgrade_user_handler))
         .route("/api/admin/packages/{name}", axum::routing::delete(admin_delete_package_handler))
 
-        .route("/packages/{name}", get(package_latest_web_handler))
-        .route("/packages/{name}/{version}", get(package_version_web_handler))
+        .route("/packages/{*name}", get(package_latest_web_handler))
+        .route("/packages/{*path}", get(package_version_web_handler))
         
         .route("/api/search", get(search_api_handler))
-        .route("/api/packages/{name}", get(package_latest_api_handler).delete(delete_package_handler))
-        .route("/api/packages/{name}/versions", get(package_versions_list_api_handler))
-        .route("/api/packages/{name}/{version}", get(package_version_api_handler))
-        .route("/api/packages/{name}/{version}/download", get(package_version_download_handler))
+        .route("/api/packages/{*name}", get(package_latest_api_handler).delete(delete_package_handler))
+        .route("/api/packages/{*name}/versions", get(package_versions_list_api_handler))
+        .route("/api/packages/{*path}", get(package_version_api_handler))
+        .route("/api/packages/{*path}/download", get(package_version_download_handler))
 
         .route("/api/publish", post(publish_handler).layer(DefaultBodyLimit::max(50 * 1024 * 1024)))
         .route("/download/{file}", get(download_handler))

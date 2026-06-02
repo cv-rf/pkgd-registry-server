@@ -95,6 +95,8 @@ pub struct TokenDisplay {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PackageDisplay {
     pub name: String,
+    pub namespace: String,
+    pub package_name: String,
     pub version: String,
     pub description: String,
     pub author: String,
@@ -107,6 +109,8 @@ pub struct PackageDisplay {
 #[derive(Serialize)]
 pub struct ProfilePackage {
     pub name: String,
+    pub namespace: String,
+    pub package_name: String,
     pub downloads: i64,
     pub is_verified: bool,
     pub safety_status: String,

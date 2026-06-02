@@ -2,6 +2,17 @@ use std::collections::HashMap;
 use sha2::{Sha256, Digest};
 use crate::models::PackageManifest;
 
+pub fn split_package_name(name: &str) -> (String, String) {
+    if name.starts_with('@') {
+        if let Some(idx) = name.find('/') {
+            let namespace = &name[..idx];
+            let package_name = &name[idx + 1..];
+            return (namespace.to_string(), package_name.to_string());
+        }
+    }
+    ("@global".to_string(), name.to_string())
+}
+
 pub fn migrate_storage() {
     let storage_dir = std::path::Path::new("./storage");
     let packages_dir = storage_dir.join("packages");
@@ -10,6 +21,7 @@ pub fn migrate_storage() {
         let _ = std::fs::create_dir_all(&packages_dir);
     }
 
+    // 1. Migrate old flat files in ./storage to ./storage/packages/@global/name/version/
     if let Ok(entries) = std::fs::read_dir(storage_dir) {
         for entry in entries.filter_map(Result::ok) {
             let path = entry.path();
@@ -26,7 +38,7 @@ pub fn migrate_storage() {
                         rest.strip_suffix(".tar.gz").unwrap_or(rest)
                     };
 
-                    let target_dir = packages_dir.join(name).join(version);
+                    let target_dir = packages_dir.join("@global").join(name).join(version);
                     let _ = std::fs::create_dir_all(&target_dir);
 
                     let target_name = if file_name.ends_with(".json") { "package.json" } else { "package.tar.gz" };
@@ -37,6 +49,25 @@ pub fn migrate_storage() {
                     } else {
                         println!("Migrated {} -> {:?}", file_name, target_path);
                     }
+                }
+            }
+        }
+    }
+
+    // 2. Migrate existing packages in ./storage/packages/name to ./storage/packages/@global/name
+    if let Ok(entries) = std::fs::read_dir(&packages_dir) {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            let file_name = entry.file_name().into_string().unwrap_or_default();
+
+            if path.is_dir() && !file_name.starts_with('@') {
+                let target_dir = packages_dir.join("@global").join(&file_name);
+                let _ = std::fs::create_dir_all(packages_dir.join("@global"));
+                
+                if let Err(e) = std::fs::rename(&path, &target_dir) {
+                    eprintln!("Failed to migrate package directory {}: {}", file_name, e);
+                } else {
+                    println!("Migrated directory {} -> {:?}", file_name, target_dir);
                 }
             }
         }
@@ -100,7 +131,8 @@ pub fn build_initial_index() -> HashMap<String, PackageManifest> {
 
 pub fn get_all_versions(pkg_name: &str) -> Vec<String> {
     let mut versions = Vec::new();
-    let pkg_path = format!("./storage/packages/{}", pkg_name);
+    let (namespace, name) = split_package_name(pkg_name);
+    let pkg_path = format!("./storage/packages/{}/{}", namespace, name);
     
     if let Ok(entries) = std::fs::read_dir(pkg_path) {
         for entry in entries.filter_map(Result::ok) {
@@ -118,7 +150,8 @@ pub fn get_all_versions(pkg_name: &str) -> Vec<String> {
 
 pub fn get_latest_version(pkg_name: &str) -> Option<String> {
     let mut versions = Vec::new();
-    let pkg_path = format!("./storage/packages/{}", pkg_name);
+    let (namespace, name) = split_package_name(pkg_name);
+    let pkg_path = format!("./storage/packages/{}/{}", namespace, name);
     
     let entries = std::fs::read_dir(pkg_path).ok()?;
 

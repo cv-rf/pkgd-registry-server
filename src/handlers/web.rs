@@ -8,7 +8,7 @@ use tracing::error;
 use crate::state::AppState;
 use crate::error::AppError;
 use crate::models::{PackageDisplay, PackageManifest, ProfilePackage};
-use crate::utils::{get_latest_version, get_all_versions};
+use crate::utils::{get_latest_version, get_all_versions, split_package_name};
 use md5;
 
 pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
@@ -32,8 +32,11 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
                         .flatten()
                         .unwrap_or(false);
 
+                    let (namespace, package_name) = split_package_name(&pkg.name);
                     packages.push(PackageDisplay {
                         name: pkg.name.clone(),
+                        namespace,
+                        package_name,
                         version: pkg.version.clone(),
                         description: pkg.description.clone(),
                         author: pkg.author.clone(),
@@ -49,8 +52,11 @@ pub async fn home_handler(State(state): State<Arc<AppState>>) -> Result<Html<Str
             error!("Database error in home_handler: {}", e);
             let index = state.package_index.read().await;
             for pkg in index.values().take(10) {
+                let (namespace, package_name) = split_package_name(&pkg.name);
                 packages.push(PackageDisplay {
                     name: pkg.name.clone(),
+                    namespace,
+                    package_name,
                     version: pkg.version.clone(),
                     description: pkg.description.clone(),
                     author: pkg.author.clone(),
@@ -117,9 +123,12 @@ pub async fn user_profile_web_handler(
             .map_err(|e| AppError::InternalError(e.to_string()))?
             .unwrap_or((0, false, "safe".to_string()));
         
+        let (namespace, package_name) = split_package_name(&pkg_name);
         total_downloads += pkg_data.0;
         packages.push(ProfilePackage { 
             name: pkg_name, 
+            namespace,
+            package_name,
             downloads: pkg_data.0,
             is_verified: pkg_data.1,
             safety_status: pkg_data.2,
@@ -167,22 +176,34 @@ pub async fn package_latest_web_handler(Path(name): Path<String>) -> Result<Resp
 }
 
 pub async fn package_version_web_handler(
-    Path((name, version)): Path<(String, String)>,
+    Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, AppError> {
-    let manifest_path = format!("./storage/packages/{}/{}/package.json", name, version);
+    // path can be "@cvrf/router/1.0.0" or "router/1.0.0"
+    let (name, version) = if let Some(idx) = path.rfind('/') {
+        (&path[..idx], &path[idx+1..])
+    } else {
+        return Err(AppError::NotFound);
+    };
+
+    let (namespace, pkg_name) = split_package_name(name);
+    let manifest_path = format!("./storage/packages/{}/{}/{}/package.json", namespace, pkg_name, version);
+
+    if !std::path::Path::new(&manifest_path).exists() {
+         return Err(AppError::NotFound);
+    }
 
     let raw_json = std::fs::read_to_string(manifest_path)?;
     let manifest: PackageManifest = serde_json::from_str(&raw_json)?;
 
     let db_pkg: (i64, bool, String) = sqlx::query_as("SELECT downloads, is_verified, safety_status FROM packages WHERE name = $1")
-        .bind(&name)
+        .bind(name)
         .fetch_optional(&state.db)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?
         .unwrap_or((0, false, "safe".to_string()));
 
-    let versions = get_all_versions(&name);
+    let versions = get_all_versions(name);
 
     let mut context = Context::new();
     context.insert("manifest", &manifest);

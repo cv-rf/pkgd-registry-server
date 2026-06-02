@@ -11,6 +11,7 @@ use crate::models::{
     AdminPaginationParams, PaginatedResponse, UserVerifyRequest,
     UpdateSafetyRequest, UpdateSuspensionRequest
 };
+use crate::utils::split_package_name;
 
 pub async fn toggle_safety_handler(
     State(state): State<Arc<AppState>>,
@@ -71,8 +72,8 @@ pub async fn api_dashboard_handler(
     let search = params.q.unwrap_or_default();
     let search_pattern = format!("%{}%", search);
 
-    let db_packages: Vec<(String, i64, bool, String)> = sqlx::query_as(
-        "SELECT name, downloads, is_verified, safety_status FROM packages WHERE name ILIKE $1 ORDER BY name ASC LIMIT $2 OFFSET $3"
+    let db_packages: Vec<(String, String, String, i64, bool, String)> = sqlx::query_as(
+        "SELECT name, namespace, package_name, downloads, is_verified, safety_status FROM packages WHERE name ILIKE $1 ORDER BY name ASC LIMIT $2 OFFSET $3"
     )
     .bind(&search_pattern)
     .bind(limit)
@@ -88,9 +89,11 @@ pub async fn api_dashboard_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut packages = Vec::new();
-    for (name, downloads, is_verified, safety_status) in db_packages {
+    for (name, namespace, package_name, downloads, is_verified, safety_status) in db_packages {
         packages.push(PackageDisplay {
             name,
+            namespace,
+            package_name,
             version: "".to_string(),
             description: "".to_string(),
             author: "".to_string(),
@@ -159,8 +162,11 @@ pub async fn admin_delete_package_handler(
 
     tracing::info!("Staff member {} is deleting package '{}'", user.username, name);
 
-    sqlx::query("DELETE FROM package_owners WHERE package_name = $1")
-        .bind(&name)
+    let (namespace, pkg_name) = split_package_name(&name);
+
+    sqlx::query("DELETE FROM package_owners WHERE package_name = $1 AND namespace = $2")
+        .bind(&pkg_name)
+        .bind(&namespace)
         .execute(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -176,7 +182,7 @@ pub async fn admin_delete_package_handler(
         index.remove(&name);
     }
 
-    let pkg_dir = format!("./storage/packages/{}", name);
+    let pkg_dir = format!("./storage/packages/{}/{}", namespace, pkg_name);
     if std::path::Path::new(&pkg_dir).exists() {
         std::fs::remove_dir_all(pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
