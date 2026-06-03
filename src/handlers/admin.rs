@@ -80,13 +80,19 @@ pub async fn api_dashboard_handler(
     .bind(offset)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        tracing::error!("Database error in api_dashboard_handler (fetch packages): {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM packages WHERE name ILIKE $1")
         .bind(&search_pattern)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in api_dashboard_handler (count packages): {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let mut packages = Vec::new();
     for (name, namespace, package_name, downloads, is_verified, safety_status) in db_packages {
@@ -135,13 +141,19 @@ pub async fn api_list_users_handler(
     .bind(offset)
     .fetch_all(&state.db)
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        tracing::error!("Database error in api_list_users_handler (fetch users): {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE username ILIKE $1")
         .bind(&search_pattern)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in api_list_users_handler (count users): {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(PaginatedResponse {
         items: users,
@@ -169,13 +181,19 @@ pub async fn admin_delete_package_handler(
         .bind(&namespace)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in admin_delete_package_handler (delete owners): {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     sqlx::query("DELETE FROM packages WHERE name = $1")
         .bind(&name)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in admin_delete_package_handler (delete package): {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     {
         let mut index = state.package_index.write().await;
@@ -184,7 +202,10 @@ pub async fn admin_delete_package_handler(
 
     let pkg_dir = format!("./storage/packages/{}/{}", namespace, pkg_name);
     if std::path::Path::new(&pkg_dir).exists() {
-        std::fs::remove_dir_all(pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        std::fs::remove_dir_all(pkg_dir).map_err(|e| {
+            tracing::error!("File system error in admin_delete_package_handler (remove dir): {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     }
 
     Ok((StatusCode::OK, "Package deleted successfully"))
@@ -209,7 +230,10 @@ pub async fn upgrade_user_handler(
         .bind(payload.username)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in upgrade_user_handler: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(StatusCode::OK)
 }
@@ -228,7 +252,10 @@ pub async fn toggle_verify_handler(
         .bind(&payload.name)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in toggle_verify_handler: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(StatusCode::OK)
 }
@@ -247,7 +274,10 @@ pub async fn toggle_user_verify_handler(
         .bind(&payload.username)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in toggle_user_verify_handler: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(StatusCode::OK)
 }

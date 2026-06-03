@@ -188,7 +188,10 @@ pub async fn publish_handler(
             .bind(&namespace)
             .fetch_optional(&state.db)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|e| {
+                tracing::error!("Database error (owner check): {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
         
         if let Some(owner_uid) = owner {
             if owner_uid != user.id {
@@ -202,7 +205,10 @@ pub async fn publish_handler(
                 .bind(user.id)
                 .execute(&state.db)
                 .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                .map_err(|e| {
+                    tracing::error!("Database error (owner insert): {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
             tracing::info!("User {} claimed ownership of new package '{}'", user.username, manifest.name);
         }
 
@@ -213,7 +219,10 @@ pub async fn publish_handler(
             .bind(safety_status)
             .execute(&state.db)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|e| {
+                tracing::error!("Database error (package upsert): {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         // Merge Strategy
         let pkg_dir = format!("./storage/packages/{}/{}/{}", namespace, pkg_name, manifest.version);
@@ -221,8 +230,14 @@ pub async fn publish_handler(
         
         if std::path::Path::new(&manifest_path).exists() {
             tracing::info!("Version {} of {} already exists. Merging targets...", manifest.version, manifest.name);
-            let existing_manifest_str = std::fs::read_to_string(&manifest_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            let mut existing_manifest: PackageManifest = serde_json::from_str(&existing_manifest_str).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let existing_manifest_str = std::fs::read_to_string(&manifest_path).map_err(|e| {
+                tracing::error!("File error (read existing manifest): {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            let mut existing_manifest: PackageManifest = serde_json::from_str(&existing_manifest_str).map_err(|e| {
+                tracing::error!("JSON error (parse existing manifest): {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
             
             // Merge new targets into existing targets
             if let Some(new_targets) = manifest.targets {
@@ -236,14 +251,20 @@ pub async fn publish_handler(
             manifest = existing_manifest;
         } else {
             // New version, create directory
-            std::fs::create_dir_all(&pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            std::fs::create_dir_all(&pkg_dir).map_err(|e| {
+                tracing::error!("File error (create pkg dir): {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
         }
 
         // Save the tarball with its original filename (important for multi-arch)
         let save_filename = filename.unwrap_or_else(|| "package.tar.gz".to_string());
         let full_save_path = format!("{}/{}", pkg_dir, save_filename);
         std::fs::write(&full_save_path, bytes)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|e| {
+                tracing::error!("File error (write tarball): {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         // Update file map for quick downloads
         {
@@ -253,9 +274,15 @@ pub async fn publish_handler(
 
         // Save updated manifest
         let updated_json = serde_json::to_string_pretty(&manifest)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|e| {
+                tracing::error!("JSON error (serialize merged manifest): {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
         std::fs::write(&manifest_path, updated_json)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|e| {
+                tracing::error!("File error (write merged manifest): {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         {
             let mut index = state.package_index.write().await;

@@ -44,7 +44,10 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedUser {
         .bind(token)
         .fetch_optional(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|e| {
+            tracing::error!("Database error during authentication: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
         user.token = token.to_string();

@@ -251,10 +251,16 @@ pub async fn update_password_handler(
         .bind(user.id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in update_password_handler (fetch hash): {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let parsed_hash = PasswordHash::new(&stored_hash)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Error parsing password hash in update_password_handler: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     if Argon2::default().verify_password(payload.old_password.as_bytes(), &parsed_hash).is_err() {
         return Err(StatusCode::UNAUTHORIZED);
@@ -263,7 +269,10 @@ pub async fn update_password_handler(
     let salt = SaltString::generate(&mut OsRng);
     let new_hash = Argon2::default()
         .hash_password(payload.new_password.as_bytes(), &salt)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|e| {
+            tracing::error!("Error hashing new password in update_password_handler: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .to_string();
 
     sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
@@ -271,7 +280,10 @@ pub async fn update_password_handler(
         .bind(user.id)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in update_password_handler (update hash): {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok((StatusCode::OK, "Password updated successfully."))
 }
@@ -284,7 +296,10 @@ pub async fn list_tokens_handler(
         .bind(user.id)
         .fetch_all(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in list_tokens_handler: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(tokens))
 }
@@ -308,7 +323,10 @@ pub async fn create_token_handler(
         .bind(name)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in create_token_handler: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(TokenDisplay {
         token: row.0,
@@ -327,7 +345,10 @@ pub async fn revoke_token_handler(
         .bind(user.id)
         .execute(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Database error in revoke_token_handler: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     if result.rows_affected() == 0 {
         return Err(StatusCode::NOT_FOUND);
