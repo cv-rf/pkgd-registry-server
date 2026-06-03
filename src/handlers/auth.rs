@@ -8,7 +8,7 @@ use std::sync::Arc;
 use sqlx::Row;
 use crate::state::{AppState, AuthenticatedUser};
 use crate::models::{
-    AuthRequest, AuthResponse, BioRequest, ProfileEditResponse,
+    AuthRequest, AuthResponse, ApiLoginResponse, BioRequest, ProfileEditResponse,
     UpdateProfileRequest, UpdatePasswordRequest, CreateTokenRequest, TokenDisplay,
     PublicKeyEntry, AddKeyRequest
 };
@@ -98,7 +98,7 @@ pub async fn register_handler(
 pub async fn login_handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AuthRequest>,
-) -> Result<Json<AuthResponse>, StatusCode> {
+) -> Result<Json<ApiLoginResponse>, StatusCode> {
     
     let user_result = sqlx::query_as::<_, (i64, String)>(
         "SELECT id, password_hash FROM users WHERE username = $1"
@@ -146,9 +146,8 @@ pub async fn login_handler(
 
     tracing::info!("User {} successfully logged in.", payload.username);
 
-    Ok(Json(AuthResponse {
+    Ok(Json(ApiLoginResponse {
         token,
-        message: "Login successful. Save this token securely!".to_string(),
     }))
 }
 

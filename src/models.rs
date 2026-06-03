@@ -30,6 +30,11 @@ pub struct AuthResponse {
     pub message: String,
 }
 
+#[derive(Serialize)]
+pub struct ApiLoginResponse {
+    pub token: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum UserTier {
