@@ -158,7 +158,7 @@
             }
 
             const token = localStorage.getItem('pkgd_token');
-            const res = await fetch('/api/packages/{{ manifest.name }}', {
+            const res = await fetch('/api/packages/' + encodeURIComponent('{{ manifest.name }}'), {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`

@@ -7,6 +7,9 @@ pub fn split_package_name(name: &str) -> (String, String) {
             let namespace = &name[..idx];
             let package_name = &name[idx + 1..];
             return (namespace.to_string(), package_name.to_string());
+        } else {
+            // It's just a namespace like "@atticl"
+            return (name.to_string(), "".to_string());
         }
     }
     ("@global".to_string(), name.to_string())

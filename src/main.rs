@@ -269,7 +269,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
 
         .route("/api/publish", post(publish_handler).layer(DefaultBodyLimit::max(50 * 1024 * 1024)))
-        .route("/download/{file}", get(download_handler))
+        .route("/download/{*file}", get(download_handler))
         .layer(TraceLayer::new_for_http())
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
         .with_state(shared_state);
