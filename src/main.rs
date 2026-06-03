@@ -160,6 +160,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "ALTER TABLE packages ADD COLUMN IF NOT EXISTS namespace TEXT DEFAULT '@global'",
         "ALTER TABLE packages ADD COLUMN IF NOT EXISTS package_name TEXT",
         "ALTER TABLE package_owners ADD COLUMN IF NOT EXISTS namespace TEXT DEFAULT '@global'",
+        // Fix for primary key in package_owners to support namespacing
+        "DO $$ 
+         BEGIN 
+            IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'package_owners_pkey' AND table_name = 'package_owners') THEN
+                -- Check if the PK is already composite (includes namespace)
+                IF (SELECT count(*) FROM information_schema.key_column_usage WHERE table_name = 'package_owners' AND constraint_name = 'package_owners_pkey') = 1 THEN
+                    ALTER TABLE package_owners DROP CONSTRAINT package_owners_pkey;
+                    ALTER TABLE package_owners ADD PRIMARY KEY (package_name, namespace);
+                END IF;
+            END IF;
+         END $$;",
     ];
 
     for q in migrations {
