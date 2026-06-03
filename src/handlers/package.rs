@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::state::{AppState, AuthenticatedUser, OptionalAuthenticatedUser};
 use crate::models::{PackageManifest, SearchParams, AuthorKeysResponse, PublicKeyEntry};
 use crate::error::AppError;
-use crate::utils::{compute_checksum, get_latest_version, get_all_versions, split_package_name};
+use crate::utils::{get_latest_version, get_all_versions, split_package_name};
 use crate::scanner::scan_package;
 
 pub async fn package_api_handler(
@@ -117,6 +117,7 @@ pub async fn publish_handler(
 
     let mut manifest_json = None;
     let mut file_bytes = None;
+    let mut filename = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)? {
         let name = field.name().unwrap_or("").to_string();
@@ -125,6 +126,7 @@ pub async fn publish_handler(
             let text = field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?;
             manifest_json = Some(text);
         } else if name == "tarball" {
+            filename = field.file_name().map(|s| s.to_string());
             let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
             file_bytes = Some(data);
         }
@@ -132,10 +134,19 @@ pub async fn publish_handler(
 
     if let (Some(manifest_str), Some(bytes)) = (manifest_json, file_bytes) {
         let mut manifest: PackageManifest = serde_json::from_str(&manifest_str)
-            .map_err(|_| StatusCode::BAD_REQUEST)?;
+            .map_err(|e| {
+                tracing::error!("Failed to parse manifest: {}", e);
+                StatusCode::BAD_REQUEST
+            })?;
 
         let (namespace, pkg_name) = split_package_name(&manifest.name);
         
+        // Restricted name check: only staff can use "pkgd" in package names
+        if manifest.name.to_lowercase().contains("pkgd") && user.tier != "staff" {
+             tracing::warn!("User {} tried to publish package with restricted name '{}'", user.username, manifest.name);
+             return Err(StatusCode::FORBIDDEN);
+        }
+
         // Authorization: User must own the namespace
         // Rule: Every user owns @username. Only staff/verified can publish to @global or other system namespaces.
         let user_namespace = format!("@{}", user.username);
@@ -204,18 +215,46 @@ pub async fn publish_handler(
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        let hash = compute_checksum(&bytes);
-        manifest.checksum = Some(hash);
-
+        // Merge Strategy
         let pkg_dir = format!("./storage/packages/{}/{}/{}", namespace, pkg_name, manifest.version);
-        std::fs::create_dir_all(&pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let manifest_path = format!("{}/package.json", pkg_dir);
+        
+        if std::path::Path::new(&manifest_path).exists() {
+            tracing::info!("Version {} of {} already exists. Merging targets...", manifest.version, manifest.name);
+            let existing_manifest_str = std::fs::read_to_string(&manifest_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let mut existing_manifest: PackageManifest = serde_json::from_str(&existing_manifest_str).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            
+            // Merge new targets into existing targets
+            if let Some(new_targets) = manifest.targets {
+                let targets = existing_manifest.targets.get_or_insert_with(std::collections::HashMap::new);
+                for (target, info) in new_targets {
+                    targets.insert(target, info);
+                }
+            }
+            
+            // Use the merged manifest
+            manifest = existing_manifest;
+        } else {
+            // New version, create directory
+            std::fs::create_dir_all(&pkg_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
 
-        std::fs::write(format!("{}/package.tar.gz", pkg_dir), bytes)
+        // Save the tarball with its original filename (important for multi-arch)
+        let save_filename = filename.unwrap_or_else(|| "package.tar.gz".to_string());
+        let full_save_path = format!("{}/{}", pkg_dir, save_filename);
+        std::fs::write(&full_save_path, bytes)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+        // Update file map for quick downloads
+        {
+            let mut map = state.file_map.write().await;
+            map.insert(save_filename, full_save_path);
+        }
+
+        // Save updated manifest
         let updated_json = serde_json::to_string_pretty(&manifest)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        std::fs::write(format!("{}/package.json", pkg_dir), updated_json)
+        std::fs::write(&manifest_path, updated_json)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         {
@@ -234,31 +273,48 @@ pub async fn download_handler(
     Path(file): Path<String>,
 ) -> Result<Response, AppError> {
     
-    let structured_path = if let Some(idx) = file.rfind('-') {
-        let name = &file[..idx];
-        let version_with_ext = &file[idx+1..];
-        let version = version_with_ext.strip_suffix(".tar.gz").unwrap_or(version_with_ext);
-        Some(format!("./storage/packages/{}/{}/package.tar.gz", name, version))
-    } else {
-        None
+    // Check file_map first for high-performance lookup of multi-arch files
+    let path_from_map = {
+        let map = state.file_map.read().await;
+        map.get(&file).cloned()
     };
 
-    let file_bytes = if let Some(path) = structured_path.filter(|p| std::path::Path::new(p).exists()) {
+    let file_bytes = if let Some(path) = path_from_map {
         std::fs::read(path)?
     } else {
-        
-        let legacy_path = format!("./storage/{}", file);
-        std::fs::read(legacy_path)?
+        // Fallback for legacy or structured lookups if not in map
+        let structured_path = if let Some(idx) = file.rfind('-') {
+            let name = &file[..idx];
+            let version_with_ext = &file[idx+1..];
+            let version = version_with_ext.strip_suffix(".tar.gz").unwrap_or(version_with_ext);
+            Some(format!("./storage/packages/{}/{}/package.tar.gz", name, version))
+        } else {
+            None
+        };
+
+        if let Some(path) = structured_path.filter(|p| std::path::Path::new(p).exists()) {
+            std::fs::read(path)?
+        } else {
+            let legacy_path = format!("./storage/{}", file);
+            std::fs::read(legacy_path)?
+        }
     };
 
+    // Increment download count (best effort)
     if let Some(idx) = file.rfind('-') {
         let pkg_name = &file[..idx];
+        // Try to normalize name for DB lookup (underscores back to slashes if namespaced)
+        let normalized_name = if pkg_name.starts_with('@') && pkg_name.contains('_') {
+            pkg_name.replacen('_', "/", 1)
+        } else {
+            pkg_name.to_string()
+        };
         
-        sqlx::query("INSERT INTO packages (name, downloads) VALUES ($1, 1) ON CONFLICT(name) DO UPDATE SET downloads = packages.downloads + 1")
+        let _ = sqlx::query("UPDATE packages SET downloads = downloads + 1 WHERE name = $1 OR name = $2")
+            .bind(&normalized_name)
             .bind(pkg_name)
             .execute(&state.db)
-            .await
-            .map_err(|e| AppError::InternalError(e.to_string()))?;
+            .await;
     }
 
     let headers = [

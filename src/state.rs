@@ -12,6 +12,7 @@ use crate::models::PackageManifest;
 pub struct AppState {
     pub tera: Tera,
     pub package_index: RwLock<HashMap<String, PackageManifest>>,
+    pub file_map: RwLock<HashMap<String, String>>,
     pub db: PgPool,
 }
 

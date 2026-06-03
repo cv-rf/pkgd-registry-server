@@ -198,11 +198,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Compiling templates and indexing packages...");
     let mut tera = Tera::new("templates/**/*").expect("Failed to compile templates");
     tera.autoescape_on(vec!["html", "xml"]);
-    let initial_index = build_initial_index();
+    let mut initial_file_map = std::collections::HashMap::new();
+    let initial_index = build_initial_index(&mut initial_file_map);
 
     let shared_state = Arc::new(AppState { 
         tera,
         package_index: RwLock::new(initial_index),
+        file_map: RwLock::new(initial_file_map),
         db: db_pool,
     });
 

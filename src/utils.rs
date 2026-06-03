@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use sha2::{Sha256, Digest};
 use crate::models::PackageManifest;
 
 pub fn split_package_name(name: &str) -> (String, String) {
@@ -74,15 +73,7 @@ pub fn migrate_storage() {
     }
 }
 
-pub fn compute_checksum(file_bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(file_bytes);
-    let result = hasher.finalize();
-    
-    hex::encode(result)
-}
-
-pub fn build_initial_index() -> HashMap<String, PackageManifest> {
+pub fn build_initial_index(file_map: &mut HashMap<String, String>) -> HashMap<String, PackageManifest> {
     let mut index: HashMap<String, PackageManifest> = HashMap::new();
     let root = std::path::Path::new("./storage/packages");
     
@@ -91,41 +82,47 @@ pub fn build_initial_index() -> HashMap<String, PackageManifest> {
         return index;
     }
 
-    fn walk_dir(dir: &std::path::Path, index: &mut HashMap<String, PackageManifest>) {
+    fn walk_dir(dir: &std::path::Path, index: &mut HashMap<String, PackageManifest>, file_map: &mut HashMap<String, String>) {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
                 if path.is_dir() {
-                    walk_dir(&path, index);
-                } else if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    if let Ok(json) = std::fs::read_to_string(&path) {
-                        if let Ok(manifest) = serde_json::from_str::<PackageManifest>(&json) {
-                            let should_insert = match index.get(&manifest.name) {
-                                None => true,
-                                Some(existing) => {
-                                    if let (Ok(new_v), Ok(old_v)) = (
-                                        semver::Version::parse(&manifest.version),
-                                        semver::Version::parse(&existing.version)
-                                    ) {
-                                        new_v > old_v
-                                    } else {
-                                        true
+                    walk_dir(&path, index, file_map);
+                } else {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    if file_name.ends_with(".json") {
+                        if let Ok(json) = std::fs::read_to_string(&path) {
+                            if let Ok(manifest) = serde_json::from_str::<PackageManifest>(&json) {
+                                let should_insert = match index.get(&manifest.name) {
+                                    None => true,
+                                    Some(existing) => {
+                                        if let (Ok(new_v), Ok(old_v)) = (
+                                            semver::Version::parse(&manifest.version),
+                                            semver::Version::parse(&existing.version)
+                                        ) {
+                                            new_v > old_v
+                                        } else {
+                                            true
+                                        }
                                     }
-                                }
-                            };
+                                };
 
-                            if should_insert {
-                                index.insert(manifest.name.clone(), manifest);
+                                if should_insert {
+                                    index.insert(manifest.name.clone(), manifest);
+                                }
                             }
                         }
+                    } else if file_name.ends_with(".tar.gz") {
+                        // Store the full path for this filename
+                        file_map.insert(file_name, path.to_string_lossy().to_string());
                     }
                 }
             }
         }
     }
 
-    walk_dir(root, &mut index);
-    println!("Loaded {} unique packages into memory index.", index.len());
+    walk_dir(root, &mut index, file_map);
+    println!("Loaded {} unique packages and {} files into memory.", index.len(), file_map.len());
     index
 }
 

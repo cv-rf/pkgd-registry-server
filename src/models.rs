@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TargetInfo {
+    pub checksum: String,
+    pub signature: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PackageManifest {
     pub name: String,
     pub version: String,
@@ -11,6 +17,8 @@ pub struct PackageManifest {
     pub dependencies: Option<Vec<String>>,
     #[serde(default)]
     pub signature: Option<String>,
+    #[serde(default)]
+    pub targets: Option<std::collections::HashMap<String, TargetInfo>>,
 }
 
 #[derive(Deserialize)]

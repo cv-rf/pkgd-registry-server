@@ -33,6 +33,10 @@ pub async fn register_handler(
         return (StatusCode::BAD_REQUEST, "Username can only contain letters, numbers, underscores, and hyphens.").into_response();
     }
 
+    if payload.username.to_lowercase().contains("pkgd") {
+        return (StatusCode::BAD_REQUEST, "Username cannot contain 'pkgd'.").into_response();
+    }
+
     if payload.password.len() < 8 || payload.password.len() > 128 {
         return (StatusCode::BAD_REQUEST, "Password must be between 8 and 128 characters.").into_response();
     }
