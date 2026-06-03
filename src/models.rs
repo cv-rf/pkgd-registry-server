@@ -2,16 +2,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TargetInfo {
-    pub checksum: String,
-    pub signature: String,
+    pub checksum: Option<String>,
+    pub signature: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PackageManifest {
     pub name: String,
     pub version: String,
-    pub description: String,
-    pub author: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
     pub checksum: Option<String>,
     #[serde(default)]
     pub dependencies: Option<Vec<String>>,

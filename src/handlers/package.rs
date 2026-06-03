@@ -359,7 +359,7 @@ pub async fn search_api_handler(
     let results: Vec<PackageManifest> = index.values()
         .filter(|pkg| {
             pkg.name.to_lowercase().contains(&query) ||
-            pkg.description.to_lowercase().contains(&query)
+            pkg.description.as_deref().unwrap_or("").to_lowercase().contains(&query)
         })
         .cloned()
         .collect();
