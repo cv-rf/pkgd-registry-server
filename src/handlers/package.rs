@@ -84,12 +84,28 @@ pub async fn package_version_download_handler(
         }
     }
 
-    let pkg_path = format!("./storage/packages/{}/{}/{}/package.tar.gz", namespace, pkg_name, version);
-    if !std::path::Path::new(&pkg_path).exists() {
-        return Err(AppError::NotFound);
+    // --- NEW MULTI-ARCH AWARE LOGIC ---
+    let version_dir = format!("./storage/packages/{}/{}/{}", namespace, pkg_name, version);
+    
+    let mut target_file_path = None;
+    let mut actual_filename = String::new();
+
+    // Scan the directory for the first available .tar.gz file
+    if let Ok(entries) = std::fs::read_dir(&version_dir) {
+        for entry in entries.filter_map(Result::ok) {
+            let fname = entry.file_name().to_string_lossy().to_string();
+            if fname.ends_with(".tar.gz") {
+                target_file_path = Some(entry.path());
+                actual_filename = fname;
+                break; // Grab the first one we find!
+            }
+        }
     }
 
+    // If no .tar.gz is found, return 404
+    let pkg_path = target_file_path.ok_or(AppError::NotFound)?;
     let file_bytes = std::fs::read(pkg_path)?;
+    // ----------------------------------
 
     sqlx::query("INSERT INTO packages (name, namespace, package_name, downloads) VALUES ($1, $2, $3, 1) ON CONFLICT(name) DO UPDATE SET downloads = packages.downloads + 1")
         .bind(&name)
@@ -99,11 +115,10 @@ pub async fn package_version_download_handler(
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-    let display_name = name.replace('/', "-");
-    let filename = format!("{}-{}.tar.gz", display_name, version);
+    // Serve it back using the real, dynamic filename!
     let headers = [
         ("content-type", "application/gzip"),
-        ("content-disposition", &format!("attachment; filename=\"{}\"", filename)),
+        ("content-disposition", &format!("attachment; filename=\"{}\"", actual_filename)),
     ];
 
     Ok((headers, file_bytes).into_response())
