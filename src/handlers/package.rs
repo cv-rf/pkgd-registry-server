@@ -17,6 +17,7 @@ pub async fn package_api_handler(
     OptionalAuthenticatedUser(user): OptionalAuthenticatedUser,
     Path(path): Path<String>,
 ) -> Result<Response, AppError> {
+    tracing::debug!("Package API request: method={}, path='{}'", method, path);
     // Dispatch based on path and method
     
     // 1. Download: "@cvrf/router/1.0.0/download" or "router/1.0.0/download"
@@ -402,6 +403,7 @@ pub async fn delete_package_handler(
     tracing::info!("User {} is attempting to delete package '{}'...", user.username, name);
 
     let (namespace, pkg_name) = split_package_name(&name);
+    tracing::debug!("Split name: namespace='{}', pkg_name='{}'", namespace, pkg_name);
 
     // Try finding owner with split name (modern namespacing)
     let mut owner_id: Option<i64> = sqlx::query_scalar("SELECT user_id FROM package_owners WHERE package_name = $1 AND namespace = $2")
@@ -409,7 +411,12 @@ pub async fn delete_package_handler(
         .bind(&namespace)
         .fetch_optional(&state.db)
         .await
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("Database error in delete_package_handler (modern owner fetch): {}", e);
+            AppError::InternalError(e.to_string())
+        })?;
+
+    tracing::debug!("Modern owner lookup result: {:?}", owner_id);
 
     // If not found, try finding owner with full name as package_name (legacy/migration edge case)
     if owner_id.is_none() {
@@ -419,14 +426,15 @@ pub async fn delete_package_handler(
             .await
             .ok()
             .flatten();
+        tracing::debug!("Legacy owner lookup result (name='{}'): {:?}", name, owner_id);
     }
 
     match owner_id {
         Some(uid) if uid == user.id => {
-            // Authorized
+            tracing::info!("Authorized: User {} owns package '{}'", user.username, name);
         }
-        Some(_) => {
-            tracing::warn!("User {} tried to delete '{}' which they do not own!", user.username, name);
+        Some(uid) => {
+            tracing::warn!("Forbidden: User {} (id={}) tried to delete '{}' owned by id={}", user.username, user.id, name, uid);
             return Err(AppError::InternalError("Forbidden: You do not own this package.".to_string()));
         }
         None => {

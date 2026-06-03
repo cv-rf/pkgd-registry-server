@@ -175,10 +175,12 @@ pub async fn admin_delete_package_handler(
     tracing::info!("Staff member {} is deleting package '{}'", user.username, name);
 
     let (namespace, pkg_name) = split_package_name(&name);
+    tracing::debug!("Admin delete split: namespace='{}', pkg_name='{}'", namespace, pkg_name);
 
-    sqlx::query("DELETE FROM package_owners WHERE package_name = $1 AND namespace = $2")
+    sqlx::query("DELETE FROM package_owners WHERE (package_name = $1 AND namespace = $2) OR package_name = $3")
         .bind(&pkg_name)
         .bind(&namespace)
+        .bind(&name)
         .execute(&state.db)
         .await
         .map_err(|e| {

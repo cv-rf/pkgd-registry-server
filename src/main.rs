@@ -258,7 +258,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/admin/safety", post(toggle_safety_handler))
         .route("/api/admin/suspend", post(toggle_suspension_handler))
         .route("/api/admin/upgrade-user", post(upgrade_user_handler))
-        .route("/api/admin/packages/{name}", axum::routing::delete(admin_delete_package_handler))
+        .route("/api/admin/packages/{*name}", axum::routing::delete(admin_delete_package_handler))
 
         .route("/packages/{*path}", get(package_web_handler))
         
