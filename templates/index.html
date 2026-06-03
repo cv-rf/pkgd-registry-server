@@ -74,6 +74,15 @@
         .result-item:hover { background: var(--atticl-black); }
         .result-name { font-weight: 600; color: var(--atticl-purple); display: block; }
         .result-desc { font-size: 0.85rem; color: var(--atticl-text-muted); margin-top: 4px; }
+
+        .banner { background: linear-gradient(90deg, #1A1A1A, #0A0A0A); border: 1px solid var(--atticl-border); border-left: 4px solid var(--atticl-purple); padding: 20px; border-radius: 8px; margin-bottom: 30px; display: flex; align-items: center; gap: 20px; }
+        .banner-icon { color: var(--atticl-purple); font-size: 2.5rem; }
+        .banner-content { flex: 1; }
+        .banner-title { font-weight: 600; margin-bottom: 5px; color: var(--atticl-white); }
+        .banner-text { font-size: 0.9rem; color: var(--atticl-text-muted); }
+        .install-command { background-color: var(--atticl-black); padding: 10px 15px; border-radius: 5px; border: 1px solid var(--atticl-border); font-family: monospace; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 0.85rem; }
+        .copy-icon { cursor: pointer; color: var(--atticl-text-muted); transition: color 0.2s; }
+        .copy-icon:hover { color: var(--atticl-purple); }
     </style>
 </head>
 <body>
@@ -87,6 +96,17 @@
     <h1><span class="material-symbols-outlined">inventory_2</span> Package Registry</h1>
     <p class="subtitle">The open-source registry for our custom package manager</p>
     
+    <div class="banner">
+        <span class="material-symbols-outlined banner-icon">terminal</span>
+        <div class="banner-content">
+            <div class="banner-title">Install pkgd on Linux</div>
+            <div class="banner-text">Run this command to install the CLI and start managing packages:</div>
+            <div class="install-command">
+                <span id="install-cmd">curl -fsSL https://pkgd.atticl.com/install.sh | bash</span>
+                <span class="material-symbols-outlined copy-icon" onclick="copyInstallCmd()">content_copy</span>
+            </div>
+        </div>
+    </div>
     <div class="search-container">
         <form onsubmit="event.preventDefault(); window.location.href='/packages/' + document.getElementById('pkg').value;">
             <div class="search-box">
@@ -159,6 +179,12 @@
             localStorage.removeItem('pkgd_token');
             localStorage.removeItem('pkgd_username');
             window.location.reload();
+        }
+
+        function copyInstallCmd() {
+            const cmd = document.getElementById('install-cmd').innerText;
+            navigator.clipboard.writeText(cmd);
+            alert('Command copied to clipboard!');
         }
 
         const input = document.getElementById('pkg');

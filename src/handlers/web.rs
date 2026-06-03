@@ -87,6 +87,19 @@ pub async fn login_page_handler(State(state): State<Arc<AppState>>) -> Result<Ht
     Ok(Html(html_content))
 }
 
+pub async fn install_sh_handler() -> Result<Response, AppError> {
+    let content = std::fs::read_to_string("install.sh")
+        .map_err(|e| {
+            tracing::error!("Failed to read install.sh: {}", e);
+            AppError::NotFound
+        })?;
+
+    Ok((
+        [("content-type", "text/x-sh")],
+        content,
+    ).into_response())
+}
+
 pub async fn user_profile_web_handler(
     Path(username): Path<String>,
     State(state): State<Arc<AppState>>,
