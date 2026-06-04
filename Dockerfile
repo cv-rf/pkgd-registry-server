@@ -26,6 +26,9 @@ COPY --from=builder /app/target/release/pkgd-registry-server /usr/local/bin/
 # Copy templates directory which is required at runtime by Tera
 COPY --from=builder /app/templates /app/templates
 
+# Copy installation script
+COPY --from=builder /app/install.sh /app/install.sh
+
 # Set default environment variables
 ENV DATABASE_URL="postgres://postgres:postgres@db:5432/pkgd_registry"
 ENV RUST_LOG="info,pkgd_registry_server=debug"
