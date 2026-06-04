@@ -17,8 +17,8 @@ RUN cargo build --release
 FROM alpine:latest
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates
+# Install runtime dependencies including SSL and base libraries often needed by Rust
+RUN apk add --no-cache ca-certificates libgcc libstdc++ openssl
 
 # Copy binary from builder
 COPY --from=builder /app/target/release/pkgd-registry-server /usr/local/bin/
@@ -31,10 +31,11 @@ COPY --from=builder /app/install.sh /app/install.sh
 
 # Set default environment variables
 ENV DATABASE_URL="postgres://postgres:postgres@db:5432/pkgd_registry"
-ENV RUST_LOG="info,pkgd_registry_server=debug"
+ENV RUST_LOG="info,pkgd_registry_server=debug,tower_http=info"
+ENV RUST_BACKTRACE=1
 
 # Expose the port the server listens on
 EXPOSE 9999
 
-# Run the binary
-CMD ["pkgd-registry-server"]
+# Run the binary with full path
+ENTRYPOINT ["/usr/local/bin/pkgd-registry-server"]

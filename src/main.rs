@@ -49,6 +49,9 @@ use crate::handlers::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Primitive log that works before tracing is initialized
+    println!("--- PKGD REGISTRY SERVER STARTING ---");
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -208,7 +211,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     tracing::info!("Compiling templates and indexing packages...");
-    let mut tera = Tera::new("templates/**/*").expect("Failed to compile templates");
+    let mut tera = match Tera::new("templates/**/*") {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!("CRITICAL: Failed to compile templates: {}", e);
+            // Print details to stderr as well for container logs
+            eprintln!("Tera compilation error: {}", e);
+            std::process::exit(1);
+        }
+    };
     tera.autoescape_on(vec!["html", "xml"]);
     let mut initial_file_map = std::collections::HashMap::new();
     let initial_index = build_initial_index(&mut initial_file_map);
