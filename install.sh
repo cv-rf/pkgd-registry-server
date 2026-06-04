@@ -59,12 +59,19 @@ tar -xzf "$TAR_FILE" -C "$TMP_DIR"
 INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$INSTALL_DIR"
 
-if [ -f "$TMP_DIR/bin/$CLI_NAME" ]; then
-    mv "$TMP_DIR/bin/$CLI_NAME" "$INSTALL_DIR/$CLI_NAME"
-elif [ -f "$TMP_DIR/$CLI_NAME" ]; then
-    mv "$TMP_DIR/$CLI_NAME" "$INSTALL_DIR/$CLI_NAME"
+echo "=> Locating binary..."
+# Use find to locate the binary regardless of internal directory structure
+BIN_PATH=$(find "$TMP_DIR" -type f -name "$CLI_NAME" | head -n 1)
+
+if [ -n "$BIN_PATH" ]; then
+    mv "$BIN_PATH" "$INSTALL_DIR/$CLI_NAME"
+    echo "=> Binary found and moved to $INSTALL_DIR/$CLI_NAME"
 else
-    mv "$TMP_DIR"/*/"$CLI_NAME" "$INSTALL_DIR/$CLI_NAME" 2>/dev/null || mv "$TMP_DIR"/* "$INSTALL_DIR/$CLI_NAME"
+    echo "Error: Could not find binary '$CLI_NAME' in the downloaded archive."
+    echo "Archive contents:"
+    ls -R "$TMP_DIR"
+    rm -rf "$TMP_DIR"
+    exit 1
 fi
 
 chmod +x "$INSTALL_DIR/$CLI_NAME"
