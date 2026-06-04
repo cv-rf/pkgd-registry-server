@@ -15,7 +15,10 @@ if [ "$OS" != "Linux" ]; then
     exit 1
 fi
 
-if [ "$ARCH" != "x86_64" ]; then
+# Map uname output to standard release asset naming conventions
+if [ "$ARCH" = "x86_64" ]; then
+    RELEASE_ARCH="amd64"
+else
     echo "Error: Currently only x86_64 architecture is supported."
     exit 1
 fi
@@ -25,7 +28,8 @@ if ldd /bin/sh 2>&1 | grep -iq 'musl'; then
     LIBC="musl"
 fi
 
-TARGET="${ARCH}-linux-${LIBC}"
+# Construct TARGET to match the uploaded 'linux-amd64-musl' format
+TARGET="linux-${RELEASE_ARCH}-${LIBC}"
 echo "=> Detected target: $TARGET"
 
 echo "=> Fetching latest release version..."
