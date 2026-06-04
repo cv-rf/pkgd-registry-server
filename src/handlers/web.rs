@@ -100,6 +100,18 @@ pub async fn install_sh_handler() -> Result<Response, AppError> {
     ).into_response())
 }
 
+pub async fn tos_handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
+    let context = Context::new();
+    let html_content = state.tera.render("tos.html", &context)?;
+    Ok(Html(html_content))
+}
+
+pub async fn privacy_handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
+    let context = Context::new();
+    let html_content = state.tera.render("privacy.html", &context)?;
+    Ok(Html(html_content))
+}
+
 pub async fn user_profile_web_handler(
     Path(username): Path<String>,
     State(state): State<Arc<AppState>>,

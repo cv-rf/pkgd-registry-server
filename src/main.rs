@@ -38,7 +38,7 @@ use crate::handlers::{
     web::{
         home_handler, login_page_handler, register_page_handler, user_profile_web_handler,
         dashboard_page_handler, profile_edit_page_handler, package_web_handler,
-        install_sh_handler,
+        install_sh_handler, tos_handler, privacy_handler,
     },
     admin::{
         api_dashboard_handler, api_list_users_handler, toggle_verify_handler,
@@ -263,6 +263,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         .route("/packages/{*path}", get(package_web_handler))
         .route("/install.sh", get(install_sh_handler))
+        .route("/tos", get(tos_handler))
+        .route("/privacy", get(privacy_handler))
         
         .route("/api/search", get(search_api_handler))
         .route("/api/packages/{*path}", 
