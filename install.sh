@@ -23,7 +23,7 @@ else
     exit 1
 fi
 
-LIBC="gnu"
+LIBC="glibc"
 if ldd /bin/sh 2>&1 | grep -iq 'musl'; then
     LIBC="musl"
 fi
@@ -60,12 +60,12 @@ INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$INSTALL_DIR"
 
 echo "=> Locating binary..."
-# Use find to locate the binary regardless of internal directory structure
-BIN_PATH=$(find "$TMP_DIR" -type f -name "$CLI_NAME" | head -n 1)
+# Look for a binary starting with the name (e.g. pkgd or pkgd-linux-amd64-musl)
+BIN_PATH=$(find "$TMP_DIR" -type f -name "${CLI_NAME}*" | head -n 1)
 
 if [ -n "$BIN_PATH" ]; then
     mv "$BIN_PATH" "$INSTALL_DIR/$CLI_NAME"
-    echo "=> Binary found and moved to $INSTALL_DIR/$CLI_NAME"
+    echo "=> Binary found ($(basename "$BIN_PATH")) and moved to $INSTALL_DIR/$CLI_NAME"
 else
     echo "Error: Could not find binary '$CLI_NAME' in the downloaded archive."
     echo "Archive contents:"
